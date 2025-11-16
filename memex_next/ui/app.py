@@ -570,6 +570,9 @@ class BufferApp(tk.Tk):
         win.bind('<Button-1>', self._float_on_press)
         win.bind('<B1-Motion>', self._float_on_drag)
         win.bind('<ButtonRelease-1>', self._float_save_pos)
+        # hover behavior
+        win.bind('<Enter>', self._float_on_enter)
+        win.bind('<Leave>', self._float_on_leave)
         handle = tk.Frame(win, height=10, bg='#0f172a', cursor='fleur')
         handle.pack(fill='x')
         handle.bind('<Button-1>', self._float_on_press)
@@ -586,7 +589,7 @@ class BufferApp(tk.Tk):
             return b
         make_btn(frm, _tr('float_show'), _tr('float_show'), self._float_green_click, bg="#10b981")
         make_btn(frm, _tr('float_hide'), _tr('float_hide'), self._float_red_click, bg="#ef4444")
-        make_btn(frm, '??', _tr('float_search'), self._float_search_click, bg="#3b82f6")
+        make_btn(frm, '🔍', _tr('float_search'), self._float_search_click, bg="#3b82f6")
 
     def _destroy_floating_icons(self):
         if self._float_win:
@@ -615,6 +618,25 @@ class BufferApp(tk.Tk):
             cfg['floating_icons_y'] = self.floating_icons_y
             save_config(cfg)
         except Exception: pass
+
+    def _float_on_enter(self, event=None):
+        self.deiconify()
+        self.lift()
+
+    def _float_on_leave(self, event=None):
+        # Check if mouse is still over any part of the main window
+        try:
+            x, y = event.x_root, event.y_root
+            main_x = self.winfo_rootx()
+            main_y = self.winfo_rooty()
+            main_w = self.winfo_width()
+            main_h = self.winfo_height()
+            
+            # Only hide if mouse is not over main window
+            if not (main_x <= x <= main_x + main_w and main_y <= y <= main_y + main_h):
+                self.withdraw()
+        except Exception:
+            pass
 
     def _float_green_click(self): self.deiconify(); self.lift(); self.focus_force()
     def _float_red_click(self): self.withdraw()

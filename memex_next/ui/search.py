@@ -16,6 +16,12 @@ from ..config import load_config, save_config
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
+CLIPS_BASE_QUERY = (
+    "SELECT c.*, (SELECT COUNT(*) FROM files f WHERE f.clip_id=c.id) AS attachment_count"
+    " FROM clips c"
+)
+
+
 class SearchWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -72,41 +78,48 @@ class SearchWindow(tk.Toplevel):
         ttk.Button(left, text="Effacer filtres catégories", command=self.clear_category_filters).pack(anchor='w', pady=(0,5))
 
         # Tree
-        cols = ("date", "title", "categories", "tags")
+        cols = ("date", "title", "categories", "tags", "attachments")
         self.tree = ttk.Treeview(left, columns=cols, show='headings', selectmode='extended')
         for c in cols:
-            self.tree.heading(c, text=c.capitalize(), command=lambda col=c: self.sort_by(col))
-            self.tree.column(c, width=100 if c == 'date' else 250 if c == 'title' else 160)
+            label = "PJ" if c == 'attachments' else c.capitalize()
+            width = 60 if c == 'attachments' else 100 if c == 'date' else 250 if c == 'title' else 160
+            self.tree.heading(c, text=label, command=lambda col=c: self.sort_by(col))
+            self.tree.column(c, width=width, anchor='center' if c == 'attachments' else 'w')
         self.tree.pack(fill='both', expand=True)
         self.tree.bind("<Double-1>", self.open_clip_editor)
         self._tree_menu = tk.Menu(self, tearoff=0)
         self._build_context_menu()
         self.tree.bind("<Button-3>", self._on_tree_right_click)
 
-        # Droite : actions
+        # Droite : actions simplifiées
         right = ttk.Frame(main_frame)
         right.pack(side='right', fill='y', padx=(5,0))
         ttk.Label(right, text="Actions").pack(anchor='w')
-        ttk.Button(right, text="Ouvrir", command=self.open_clip_editor).pack(fill='x', pady=2)
-        ttk.Button(right, text="Supprimer", command=self.delete_clip).pack(fill='x', pady=2)
         ttk.Button(right, text="Supprimer sélection", command=self.bulk_delete_selected).pack(fill='x', pady=2)
+        ttk.Button(right, text="Supprimer clip", command=self.delete_clip).pack(fill='x', pady=2)
 
-        ttk.Label(right, text="IA").pack(anchor='w', pady=(8,0))
-        ttk.Button(right, text="Tags manquants (IA)", command=self.ai_tags_missing).pack(fill='x', pady=2)
-        ttk.Button(right, text="Traiter non traités (IA)", command=self.ai_process_untagged).pack(fill='x', pady=2)
-        ttk.Button(right, text="Catégories (sélection)", command=self.ai_cats_selected).pack(fill='x', pady=2)
-        ttk.Button(right, text="Catégories manquantes", command=self.ai_cats_missing).pack(fill='x', pady=2)
-        ttk.Button(right, text="Tout (sélection)", command=self.ai_all_selected).pack(fill='x', pady=6)
+        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(8,8))
 
-        ttk.Label(right, text="Pièces jointes").pack(anchor='w', pady=(8,0))
-        ttk.Button(right, text="Joindre fichier au clip", command=self.attach_files_to_selected_clip).pack(fill='x', pady=2)
+        ia_frame = ttk.LabelFrame(right, text="Intelligence artificielle")
+        ia_frame.pack(fill='x', pady=(0,6))
+        ttk.Button(ia_frame, text="Tags (sélection)", command=self.ai_tags_selected).pack(fill='x', pady=2)
+        ttk.Button(ia_frame, text="Tags manquants (IA)", command=self.ai_tags_missing).pack(fill='x', pady=2)
+        ttk.Button(ia_frame, text="Traitement IA (non traités)", command=self.ai_process_untagged).pack(fill='x', pady=2)
+        ttk.Button(ia_frame, text="Catégories (sélection)", command=self.ai_cats_selected).pack(fill='x', pady=2)
+        ttk.Button(ia_frame, text="Catégories manquantes (IA)", command=self.ai_cats_missing).pack(fill='x', pady=2)
+        ttk.Button(ia_frame, text="IA complète (sélection)", command=self.ai_all_selected).pack(fill='x', pady=2)
 
-        ttk.Label(right, text="Export/Import").pack(anchor='w', pady=(8,0))
-        ttk.Button(right, text="Export MD (sélection)", command=self.export_selected_md).pack(fill='x', pady=2)
-        ttk.Button(right, text="Export MD (tout)", command=self.export_all_md).pack(fill='x', pady=2)
-        ttk.Button(right, text="Export JSON (sélection)", command=self.export_selected_json).pack(fill='x', pady=2)
-        ttk.Button(right, text="Export JSON (tout)", command=self.export_all_json).pack(fill='x', pady=2)
-        ttk.Button(right, text="Importer JSON", command=self.import_json).pack(fill='x', pady=2)
+        export_btn = ttk.Menubutton(right, text="Export / Import")
+        export_menu = tk.Menu(export_btn, tearoff=0)
+        export_menu.add_command(label="Export MD (sélection)", command=self.export_selected_md)
+        export_menu.add_command(label="Export MD (tout)", command=self.export_all_md)
+        export_menu.add_separator()
+        export_menu.add_command(label="Export JSON (sélection)", command=self.export_selected_json)
+        export_menu.add_command(label="Export JSON (tout)", command=self.export_all_json)
+        export_menu.add_separator()
+        export_menu.add_command(label="Importer JSON", command=self.import_json)
+        export_btn["menu"] = export_menu
+        export_btn.pack(fill='x', pady=(4,0))
 
     # ---------- actions ----------
     def refresh(self, *args):

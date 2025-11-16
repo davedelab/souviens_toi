@@ -30,7 +30,6 @@ class EditClipWindow(tk.Toplevel):
         self.clip_id = clip_id
         self.title(f"Editer clip #{self.clip_id}")
         self._fit_geometry(1020, 700)
-        self.transient(parent)
         self.grab_set()
         self.protocol('WM_DELETE_WINDOW', self._close)
         self.cfg = load_config()

@@ -9,7 +9,9 @@ class OptionsWindow(tk.Toplevel):
         super().__init__(master)
         self.master = master
         self.title("Options")
-        self._fit_geometry(420, 480)
+        self._fit_geometry(420, 550)
+        self.grab_set()
+        self.focus_force()
         nb = ttk.Notebook(self)
         nb.pack(fill='both', expand=True)
 
@@ -20,8 +22,6 @@ class OptionsWindow(tk.Toplevel):
         ttk.Checkbutton(ui, text="Activer les icônes flottantes", variable=float_enable).pack(anchor='w', padx=12, pady=(10,6))
         tooltips_var = tk.BooleanVar(value=bool(load_config().get('tooltips_enabled', True)))
         ttk.Checkbutton(ui, text="Afficher les infobulles (tooltips)", variable=tooltips_var).pack(anchor='w', padx=12, pady=(0,6))
-        captions_var = tk.BooleanVar(value=bool(load_config().get('floating_captions', False)))
-        ttk.Checkbutton(ui, text="Afficher légendes sous les icônes flottantes", variable=captions_var).pack(anchor='w', padx=12, pady=(0,6))
         lang_var = tk.StringVar(value=str(load_config().get('ui_lang', 'fr')))
         lang_row = ttk.Frame(ui)
         lang_row.pack(fill='x', padx=12, pady=(6,6))
@@ -29,7 +29,7 @@ class OptionsWindow(tk.Toplevel):
         ttk.Combobox(lang_row, values=['fr','en'], textvariable=lang_var, state='readonly', width=6).pack(side='left', padx=(8,0))
         ttk.Label(ui, text="Taille des icônes (px)").pack(anchor='w', padx=8, pady=(8,2))
         size_var = tk.IntVar(value=int(self.master.floating_icons_size))
-        tk.Scale(ui, from_=36, to=80, resolution=2, orient='horizontal', variable=size_var).pack(fill='x', padx=12)
+        tk.Scale(ui, from_=36, to=120, resolution=2, orient='horizontal', variable=size_var).pack(fill='x', padx=12)
         ttk.Label(ui, text="Opacité").pack(anchor='w', padx=8, pady=(8,2))
         alpha_var = tk.DoubleVar(value=float(self.master.floating_icons_opacity))
         tk.Scale(ui, from_=0.4, to=0.9, resolution=0.05, orient='horizontal', variable=alpha_var).pack(fill='x', padx=12)
@@ -205,7 +205,6 @@ class OptionsWindow(tk.Toplevel):
             cfg['floating_icons_x'] = self.master.floating_icons_x
             cfg['floating_icons_y'] = self.master.floating_icons_y
             cfg['tooltips_enabled'] = bool(tooltips_var.get())
-            cfg['floating_captions'] = bool(captions_var.get())
             cfg['ui_lang'] = lang_var.get() if lang_var.get() in ('fr','en') else 'fr'
             cfg['tasks_reminders_enabled'] = bool(rem_enabled_var.get())
             cfg['tasks_reminders_interval_min'] = int(rem_interval_var.get())
