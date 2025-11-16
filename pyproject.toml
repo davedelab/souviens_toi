@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memex-next"
+version = "7.0.0"
+description = "Capture & organise notes, web clips, PDF, images"
+authors = [{name = "davedelab"}]
+dependencies = [
+  "pyperclip>=1.8",
+  "requests",
+  "pillow",
+  "markdown>=3.4",
+  "tkhtmlview; platform_system!='Linux'",
+  "tkcalendar; platform_system!='Linux'",
+  "pypdf>=3.0",
+  "pytesseract>=0.3",
+  "trafilatura>=1.6",
+  "markdownify>=0.11",
+  "ruff>=0.3",
+  "pytest>=7.4",
+  "pytest-qt>=4.2",
+]
+
+[project.optional-dependencies]
+dev = ["pre-commit>=3.5"]
+
+[project.scripts]
+memex = "memex_next.main:entry"
