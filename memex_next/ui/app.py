@@ -19,14 +19,14 @@ DB_FILE = BASE_DIR / "souviens_toi.db"
 _LANG = {
     'fr': {
         'add': 'Ajouter', 'save': 'Enregistrer', 'article': 'Article', 'md': 'MD', 'file': 'Fichier',
-        'search': 'Recherche', 'options': 'Options', 'tasks': 'Tâches', 'pin_on': 'Épingler', 'pin_off': 'Désépingler',
+        'search': 'Recherche', 'options': 'Options', 'tasks': 'Tâches', 'pin_on': 'Epingler', 'pin_off': 'Désépingler',
         'state_active': 'ACTIF', 'state_pause': 'PAUSE', 'pause_short': 'PAU', 'run_short': 'RUN',
         'float_show': 'Voir', 'float_hide': 'Cacher', 'float_search': 'Recherche',
         'tt_add': 'Ajouter le presse-papiers au buffer', 'tt_save': 'Enregistrer le buffer dans la base',
         'tt_file': 'Joindre un fichier (PDF, image, etc.) au nouveau clip',
         'tt_article': 'Capturer un article Web (extraction + Markdown)',
         'tt_md': 'Coller la sélection Web au format Markdown', 'tt_search': 'Ouvrir la recherche',
-        'tt_pin': 'Épingler la fenêtre (toujours au-dessus)', 'tt_tasks': 'Ouvrir les tâches',
+        'tt_pin': 'Epingler la fenêtre (toujours au-dessus)', 'tt_tasks': 'Ouvrir les tâches',
         'tt_options': 'Ouvrir les options', 'undo': 'Annuler', 'redo': 'Rétablir'
     },
     'en': {
@@ -202,7 +202,7 @@ class BufferApp(tk.Tk):
         btn(tb, "H1", "Titre niveau 1 (Ctrl+1)", lambda: self._md_h1_buf(), w=4, bg="#fbbf24")
         btn(tb, "H2", "Titre niveau 2 (Ctrl+2)", lambda: self._md_h2_buf(), w=4, bg="#f59e0b")
         btn(tb, "H3", "Titre niveau 3 (Ctrl+3)", lambda: self._md_h3_buf(), w=4, bg="#d97706")
-        btn(tb, "*", "Liste à puces", lambda: self._md_bullet_buf(), w=3, bg="#8b5cf6")
+        btn(tb, "*", "Liste à  puces", lambda: self._md_bullet_buf(), w=3, bg="#8b5cf6")
         btn(tb, ">", "Citation", lambda: self._md_quote_buf(), w=3, bg="#ef4444")
         btn(tb, "HR", "Ligne horizontale", lambda: self._md_hr_buf(), w=4, bg="#10b981")
         btn(tb, "Undo", "Annuler (Ctrl+Z)", lambda: self._undo_buf(), w=5, bg="#374151")
@@ -409,7 +409,7 @@ class BufferApp(tk.Tk):
         content = self.text_area.get('1.0','end').strip()
         if not content:
             from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucun texte à analyser.")
+            messagebox.showinfo("IA", "Aucun texte à analyser.")
             return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
@@ -464,7 +464,7 @@ class BufferApp(tk.Tk):
             default_url = self.last_source_url or (pyperclip.paste().strip() if self._looks_like_url(pyperclip.paste().strip()) else "")
         except Exception:
             default_url = self.last_source_url or ""
-        url = simpledialog.askstring("Article", "URL de la page Ã  capturer:", initialvalue=default_url)
+        url = simpledialog.askstring("Article", "URL de la page à capturer:", initialvalue=default_url)
         if not url: return
 
         def work(u=url):
@@ -678,7 +678,7 @@ class BufferApp(tk.Tk):
         except Exception: pass
         self.after(self._reminder_interval_ms, self._check_task_reminders)
 
-    # ---------- fenÃªtres ----------
+    # ---------- fenàƒÂªtres ----------
     def open_search(self):
         if self._search_win and self._search_win.winfo_exists():
             self._search_win.destroy()

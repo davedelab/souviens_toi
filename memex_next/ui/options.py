@@ -9,7 +9,7 @@ class OptionsWindow(tk.Toplevel):
         super().__init__(master)
         self.master = master
         self.title("Options")
-        self.geometry("420x480")
+        self._fit_geometry(420, 480)
         nb = ttk.Notebook(self)
         nb.pack(fill='both', expand=True)
 
@@ -34,7 +34,7 @@ class OptionsWindow(tk.Toplevel):
         alpha_var = tk.DoubleVar(value=float(self.master.floating_icons_opacity))
         tk.Scale(ui, from_=0.4, to=0.9, resolution=0.05, orient='horizontal', variable=alpha_var).pack(fill='x', padx=12)
         focus_var = tk.BooleanVar(value=self.master.floating_icons_focus)
-        ttk.Checkbutton(ui, text="Donner le focus à l'ouverture (icône verte)", variable=focus_var).pack(anchor='w', padx=12, pady=(8,2))
+        ttk.Checkbutton(ui, text="Donner le focus à  l'ouverture (icône verte)", variable=focus_var).pack(anchor='w', padx=12, pady=(8,2))
         ttk.Label(ui, text="Position par défaut (bord)").pack(anchor='w', padx=8, pady=(8,2))
         side_var = tk.StringVar(value=load_config().get('floating_icons_side', 'right'))
         side_row = ttk.Frame(ui)
@@ -160,23 +160,23 @@ class OptionsWindow(tk.Toplevel):
         def browse_db():
             p = fd.askopenfilename(filetypes=[["SQLite","*.db"],["Tous","*.*"]])
             if p: db_path_var.set(p)
-        ttk.Button(pick_frame, text="Parcourir…", command=browse_db).pack(side='left', padx=6)
+        ttk.Button(pick_frame, text="Parcourir¦", command=browse_db).pack(side='left', padx=6)
 
         def do_import():
             path = pathlib.Path(db_path_var.get().strip())
             if not path.is_file():
-                mb.showinfo("Import", "Choisis un fichier .db à importer")
+                mb.showinfo("Import", "Choisis un fichier .db à  importer")
                 return
             def work():
                 return migrate_from_db(path)
             def done(res, err):
-                if err: mb.showerror("Import", f"Échec: {err}")
+                if err: mb.showerror("Import", f"Echec: {err}")
                 else: mb.showinfo("Import", f"Import terminé: {res} éléments ajoutés")
                 try: self.master.refresh()
                 except Exception: pass
             from ..services.async_worker import runner
             runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
-            self.master.show_toast("Import en arrière-plan…")
+            self.master.show_toast("Import en arrière-plan¦")
         ttk.Button(data_tab, text="Importer", command=do_import).pack(anchor='e', padx=8, pady=8)
 
         # ---------- Boutons généraux ----------
@@ -230,3 +230,11 @@ class OptionsWindow(tk.Toplevel):
             mb.showinfo("Langue", "La modification de langue s'appliquera après redémarrage.")
             self.destroy()
         ttk.Button(btns, text="Appliquer", command=apply).pack(side='right', padx=4)
+
+    def _fit_geometry(self, desired_w: int, desired_h: int) -> None:
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        width = min(desired_w, max(screen_w - 60, 400))
+        height = min(desired_h, max(screen_h - 80, 300))
+        self.geometry(f"{width}x{height}")
+        self.resizable(True, True)

@@ -29,7 +29,7 @@ class EditClipWindow(tk.Toplevel):
         self.parent = parent
         self.clip_id = clip_id
         self.title(f"Editer clip #{self.clip_id}")
-        self.geometry("1020x700")
+        self._fit_geometry(1020, 700)
         self.transient(parent)
         self.grab_set()
         self.protocol('WM_DELETE_WINDOW', self._close)
@@ -49,6 +49,14 @@ class EditClipWindow(tk.Toplevel):
         self._reload_thumbnails()
         self._load_attachments_list()
         self._select_default_tab()
+
+    def _fit_geometry(self, desired_w: int, desired_h: int) -> None:
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        width = min(desired_w, max(screen_w - 60, 400))
+        height = min(desired_h, max(screen_h - 80, 300))
+        self.geometry(f"{width}x{height}")
+        self.resizable(True, True)
 
     def _create_widgets(self):
         top = ttk.Frame(self)

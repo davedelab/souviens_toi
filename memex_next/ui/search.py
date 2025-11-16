@@ -1,7 +1,6 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
-import tkinter.scrolledtext as scrolledtext
 import tkinter.filedialog as fd
 import tkinter.messagebox as mb
 import tkinter.simpledialog as sd
@@ -22,7 +21,7 @@ class SearchWindow(tk.Toplevel):
         super().__init__(master)
         self.master = master
         self.title("Recherche Souviens-toi")
-        self.geometry("1200x700")
+        self._fit_geometry(1200, 700)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         if not self.master.paused: self.master.toggle_pause()
 
@@ -60,7 +59,7 @@ class SearchWindow(tk.Toplevel):
         period_frame.pack(fill='x', pady=(0,5))
         for label, days in [("Tout", ""), ("Hier", "1"), ("Semaine", "7"), ("Quinzaine", "15"), ("Mois", "30")]:
             ttk.Radiobutton(period_frame, text=label, variable=self.period_var, value=days, command=self.refresh).pack(side='left', padx=3)
-        ttk.Checkbutton(left, text="À lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0,5))
+        ttk.Checkbutton(left, text="A lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0,5))
 
         # Filtres tags
         self.tags_filter_frame = ttk.Frame(left)
@@ -79,24 +78,10 @@ class SearchWindow(tk.Toplevel):
             self.tree.heading(c, text=c.capitalize(), command=lambda col=c: self.sort_by(col))
             self.tree.column(c, width=100 if c == 'date' else 250 if c == 'title' else 160)
         self.tree.pack(fill='both', expand=True)
-        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
-        self.tree.bind("<ButtonRelease-1>", lambda e: self.after(1, self.on_tree_select))
         self.tree.bind("<Double-1>", self.open_clip_editor)
         self._tree_menu = tk.Menu(self, tearoff=0)
         self._build_context_menu()
         self.tree.bind("<Button-3>", self._on_tree_right_click)
-
-        # Centre : aperçu
-        center = ttk.Frame(main_frame)
-        center.pack(side='left', fill='both', expand=True)
-        meta = ttk.Frame(center)
-        meta.pack(fill='x')
-        self.prev_title = ttk.Label(meta, text="", font=("Segoe UI", 11, 'bold'))
-        self.prev_title.pack(anchor='w')
-        self.prev_info = ttk.Label(meta, text="", foreground="#6b7280")
-        self.prev_info.pack(anchor='w')
-        self.preview = scrolledtext.ScrolledText(center, wrap='word', height=10, state='disabled')
-        self.preview.pack(fill='both', expand=True, pady=(4,0))
 
         # Droite : actions
         right = ttk.Frame(main_frame)
@@ -150,18 +135,29 @@ class SearchWindow(tk.Toplevel):
                              values=(dt.datetime.fromtimestamp(c['ts'], tz=dt.timezone.utc).strftime('%Y-%m-%d'),
                                      c['title'], c.get('categories'), c['tags']))
         to_select = [iid for iid in self.tree.get_children() if iid in prev_selected]
-        if to_select: self.tree.selection_set(to_select)
+        if to_select:
+            self.tree.selection_set(to_select)
         else:
             children = self.tree.get_children()
-            if children: self.tree.selection_set(children[0]); self.on_tree_select()
+            if children:
+                self.tree.selection_set(children[0])
         self.build_tag_filters()
+
+    def _fit_geometry(self, desired_w: int, desired_h: int) -> None:
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        width = min(desired_w, max(screen_w - 60, 400))
+        height = min(desired_h, max(screen_h - 80, 300))
+        self.geometry(f"{width}x{height}")
+        self.resizable(True, True)
 
     def _search_sql(self, conn, query, period):
         now = dt.datetime.now(dt.timezone.utc)
         params, where = [], []
         if query:
-            where.append("raw_text LIKE ?")
-            params.append(f"%{query}%")
+            like = f"%{query}%"
+            where.append("(raw_text LIKE ? OR title LIKE ? OR tags LIKE ? OR categories LIKE ?)")
+            params.extend([like] * 4)
         if period:
             where.append("ts >= ?")
             params.append(int((now - dt.timedelta(days=int(period))).timestamp()))
@@ -236,47 +232,6 @@ class SearchWindow(tk.Toplevel):
         self.refresh()
 
     # ---------- tree ----------
-    def on_tree_select(self, event=None):
-        sel = self.tree.selection()
-        if not sel:
-            self.prev_title.config(text="")
-            self.prev_info.config(text="")
-            self.preview.configure(state='normal'); self.preview.delete('1.0','end'); self.preview.configure(state='disabled')
-            return
-        clip_id = int(sel[0])
-        conn = create_conn()
-        row = conn.execute("SELECT title, raw_text, tags, categories, ts, source FROM clips WHERE id=?", (clip_id,)).fetchone()
-        conn.close()
-        if not row: return
-        title, raw, tags, cats, ts, source = row
-        info_parts = []
-        if tags: info_parts.append(f"Tags: {tags}")
-        if cats: info_parts.append(f"Catégories: {cats}")
-        if source: info_parts.append(f"Source: {source}")
-        date_str = dt.datetime.fromtimestamp(ts or 0, tz=dt.timezone.utc).strftime('%Y-%m-%d') if ts else ''
-        if date_str: info_parts.insert(0, date_str)
-        self.prev_title.config(text=title or "(Sans titre)")
-        self.prev_info.config(text="  ¢  ".join(info_parts))
-        self.preview.configure(state='normal')
-        self.preview.delete('1.0','end')
-        self.preview.insert('1.0', raw or '')
-        self._highlight_preview()
-        self.preview.configure(state='disabled')
-
-    def _highlight_preview(self):
-        q = self.query_var.get().strip()
-        self.preview.tag_delete('hl')
-        if not q: return
-        self.preview.tag_config('hl', background='#fde047')
-        for term in q.split():
-            if not term: continue
-            idx = '1.0'
-            while True:
-                idx = self.preview.search(term, idx, nocase=True, stopindex='end')
-                if not idx: break
-                end = f"{idx}+{len(term)}c"
-                self.preview.tag_add('hl', idx, end)
-                idx = end
 
     # ---------- actions ----------
     def open_clip_editor(self, event=None):
@@ -382,7 +337,7 @@ class SearchWindow(tk.Toplevel):
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
-        self.master.show_toast("Tags IA pour les non traités en arrière-plan…")
+        self.master.show_toast("Tags IA pour les non traités en arrière-plan¦")
 
     def ai_process_untagged(self):
         cfg = load_config()
@@ -390,7 +345,7 @@ class SearchWindow(tk.Toplevel):
         count = int(cfg.get('ai_tag_count', 5))
         def work():
             conn = create_conn()
-            rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags LIKE ?", ("%non traitée par l IA%",)).fetchall()
+            rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags LIKE ?", ("%non traitée par l'IA%",)).fetchall()
             updated = 0
             for i, raw in rows:
                 tags = ai_generate_tags(raw or '', lang=lang, count=count)
@@ -400,7 +355,7 @@ class SearchWindow(tk.Toplevel):
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
-        self.master.show_toast("Traitement IA des non traités…")
+        self.master.show_toast("Traitement IA des non traités¦")
     def ai_tags_selected(self):
         sels = self.tree.selection()
         if not sels: return
@@ -425,7 +380,7 @@ class SearchWindow(tk.Toplevel):
             return updated
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
-        self.master.show_toast("Tags IA en arrière-plan…")
+        self.master.show_toast("Tags IA en arrière-plan¦")
     def ai_cats_selected(self):
         sels = self.tree.selection()
         if not sels: return
@@ -448,7 +403,7 @@ class SearchWindow(tk.Toplevel):
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_cats_done", res, err)))
-        self.master.show_toast("Catégories IA en arrière-plan…")
+        self.master.show_toast("Catégories IA en arrière-plan¦")
 
     def ai_cats_missing(self):
         cfg = load_config()
@@ -468,7 +423,7 @@ class SearchWindow(tk.Toplevel):
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_cats_done", res, err)))
-        self.master.show_toast("Catégories IA (manquantes)…")
+        self.master.show_toast("Catégories IA (manquantes)â€¦")
 
     def ai_all_selected(self):
         sels = self.tree.selection()
@@ -500,7 +455,7 @@ class SearchWindow(tk.Toplevel):
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_all_done", res, err)))
-        self.master.show_toast("IA (Titre+Tags+Catégories)…")
+        self.master.show_toast("IA (Titre+Tags+Catégories)â€¦")
 
     # ---------- pièces jointes ----------
     def attach_files_to_selected_clip(self):
@@ -547,7 +502,7 @@ class SearchWindow(tk.Toplevel):
                 added += 1
             except Exception as e:
                 import tkinter.messagebox as mb
-                mb.showerror("Import", f"Échec import {pathlib.Path(p).name}: {e}")
+                mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.master.show_toast(f"{added} fichier(s) joint(s)")
 
