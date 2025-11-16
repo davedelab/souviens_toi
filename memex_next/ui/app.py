@@ -158,7 +158,7 @@ class BufferApp(tk.Tk):
         ttk.Button(frm_title, text="Titre", width=5, command=self.set_title_from_selection_or_clipboard).pack(side='right', padx=2)
         ttk.Button(frm_title, text="AI", width=3, command=self.ai_title_from_buffer).pack(side='right', padx=2)
         self.read_later_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frm_title, text="Ã  lire plus tard", variable=self.read_later_var).pack(side='right', padx=6)
+        ttk.Checkbutton(frm_title, text="A lire plus tard", variable=self.read_later_var).pack(side='right', padx=6)
 
         # Tags
         frm_tags = ttk.LabelFrame(self, text="Tags (pour l'envoi)")
@@ -170,8 +170,8 @@ class BufferApp(tk.Tk):
         self.tags_combo.pack(side='left', fill='x', expand=True)
         ttk.Button(tags_row, text="AI", width=3, command=self.ai_fill_tags_from_buffer).pack(side='left', padx=4)
 
-        # CatÃ©gories
-        frm_cats = ttk.LabelFrame(self, text="CatÃ©gories (0-2)")
+        # Catégories
+        frm_cats = ttk.LabelFrame(self, text="Catégories (0-2)")
         frm_cats.pack(fill='x', padx=5, pady=2)
         cats_row = ttk.Frame(frm_cats)
         cats_row.pack(fill='x', padx=2, pady=2)
@@ -202,11 +202,11 @@ class BufferApp(tk.Tk):
         btn(tb, "H1", "Titre niveau 1 (Ctrl+1)", lambda: self._md_h1_buf(), w=4, bg="#fbbf24")
         btn(tb, "H2", "Titre niveau 2 (Ctrl+2)", lambda: self._md_h2_buf(), w=4, bg="#f59e0b")
         btn(tb, "H3", "Titre niveau 3 (Ctrl+3)", lambda: self._md_h3_buf(), w=4, bg="#d97706")
-        btn(tb, "*", "Liste Ã  puces", lambda: self._md_bullet_buf(), w=3, bg="#8b5cf6")
+        btn(tb, "*", "Liste à puces", lambda: self._md_bullet_buf(), w=3, bg="#8b5cf6")
         btn(tb, ">", "Citation", lambda: self._md_quote_buf(), w=3, bg="#ef4444")
         btn(tb, "HR", "Ligne horizontale", lambda: self._md_hr_buf(), w=4, bg="#10b981")
         btn(tb, "Undo", "Annuler (Ctrl+Z)", lambda: self._undo_buf(), w=5, bg="#374151")
-        btn(tb, "Redo", "RÃ©tablir (Ctrl+Y)", lambda: self._redo_buf(), w=5, bg="#374151")
+        btn(tb, "Redo", "Rétablir (Ctrl+Y)", lambda: self._redo_buf(), w=5, bg="#374151")
 
         self.text_area = scrolledtext.ScrolledText(self, wrap='word', undo=True, autoseparators=True, maxundo=1000)
         self.text_area.pack(fill='both', expand=True, padx=5, pady=5)
@@ -245,7 +245,7 @@ class BufferApp(tk.Tk):
         current = self.attributes('-topmost')
         self.attributes('-topmost', not current)
         self.pin_btn.config(text=_tr('pin_on') if not current else _tr('pin_off'))
-        self.show_toast("FenÃªtre Ã©pinglÃ©e" if not current else "FenÃªtre dÃ©sÃ©pinglÃ©e")
+        self.show_toast("Fenêtre Epinglée" if not current else "Fenêtre Désepinglée")
 
     def add_clipboard(self, txt=None):
         if txt is None:
@@ -256,14 +256,14 @@ class BufferApp(tk.Tk):
         if self.separator_enabled and current and not current.endswith(SEPARATOR.strip()):
             self.text_area.insert("end", SEPARATOR)
         self.text_area.insert("end", txt)
-        self.show_toast("AjoutÃ© au buffer")
+        self.show_toast("Ajoutée au buffer")
 
     def send_all(self):
         content = self.text_area.get("1.0", "end").strip()
         if not content:
             return
         title = self.title_var.get().strip() or "Sans titre"
-        tags = self.tags_var.get().strip() or "non traitÃ©e par l IA"
+        tags = self.tags_var.get().strip() or "Non traitée par l'IA"
         source = self.last_source_url or ""
         cats = ", ".join({self.cat1_var_buf.get().strip(), self.cat2_var_buf.get().strip()} - {""})
         read_later = 1 if self.read_later_var.get() else 0
@@ -288,7 +288,7 @@ class BufferApp(tk.Tk):
         self.read_later_var.set(False)
         self.tick_lbl.pack(side='left', padx=5)
         self.tick_lbl.after(1500, self.tick_lbl.pack_forget)
-        self.show_toast("EnregistrÃ©")
+        self.show_toast("Enregistré")
 
     # ---------- markdown buffer ----------
     def _md_wrap_buf(self, left, right, placeholder=''):
@@ -402,14 +402,14 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("IA", str(err))
                 return
             self.title_var.set(res or self.title_var.get())
-            self.show_toast("Titre IA appliquÃ©")
+            self.show_toast("Titre IA Appliqué")
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     def ai_fill_tags_from_buffer(self):
         content = self.text_area.get('1.0','end').strip()
         if not content:
             from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucun texte Ã  analyser.")
+            messagebox.showinfo("IA", "Aucun texte à analyser.")
             return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
@@ -437,7 +437,7 @@ class BufferApp(tk.Tk):
         user_cats = cfg.get('user_categories', [])
         if not user_cats:
             from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucune catÃ©gorie dÃ©finie (Options > CatÃ©gories)")
+            messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
 
         def work():
@@ -454,7 +454,7 @@ class BufferApp(tk.Tk):
             suggested = (res or {}).get('suggested') or []
             self.cat1_var_buf.set(from_list[0] if len(from_list) > 0 else self.cat1_var_buf.get())
             self.cat2_var_buf.set(suggested[0] if len(suggested) > 0 else self.cat2_var_buf.get())
-            self.show_toast("CatÃ©gories IA proposÃ©es")
+            self.show_toast("Catégories IA proposées")
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     # ---------- web ----------
@@ -496,7 +496,7 @@ class BufferApp(tk.Tk):
                 from tkinter import messagebox
                 messagebox.showerror("Article", str(err))
             else:
-                self.show_toast("Article capturÃ© en Markdown")
+                self.show_toast("Article capturé en Markdown")
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     # ---------- files ----------
@@ -545,14 +545,14 @@ class BufferApp(tk.Tk):
                         return True
                     return False
                 def done(res, err):
-                    self.show_toast("Fichier importÃ© et indexÃ©" if res else "Fichier importÃ©")
+                    self.show_toast("Fichier importé et indexé" if res else "Fichier importé")
                 runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
                 added += 1
             except Exception as e:
                 from tkinter import messagebox
-                messagebox.showerror("Import", f"Ã‰chec import {pathlib.Path(p).name}: {e}")
+                messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
-            self.show_toast(f"{added} fichier(s) ajoutÃ©(s)")
+            self.show_toast(f"{added} fichier(s) ajouté(s)")
             if first_clip_id:
                 self.after(100, lambda: EditClipWindow(self, first_clip_id))
 
@@ -642,7 +642,7 @@ class BufferApp(tk.Tk):
             self.title_var.set(txt)
             self.show_toast("Titre rempli")
         else:
-            self.show_toast("Aucune sÃ©lection ni presse-papiers")
+            self.show_toast("Aucune sélection ni presse-papiers")
 
     def _looks_like_url(self, s: str) -> bool:
         import re
@@ -673,7 +673,7 @@ class BufferApp(tk.Tk):
             conn.close()
             for tid, title, due in rows:
                 if tid in self._reminded_ids: continue
-                self.show_toast(f"Ã‰chÃ©ance proche: {title}")
+                self.show_toast(f"Echéance proche: {title}")
                 self._reminded_ids.add(tid)
         except Exception: pass
         self.after(self._reminder_interval_ms, self._check_task_reminders)
