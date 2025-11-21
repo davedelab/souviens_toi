@@ -14,5 +14,13 @@ def init_db():
     conn = create_conn()
     schema = (pathlib.Path(__file__).parent / "resources" / "schema.sql").read_text(encoding="utf-8")
     conn.executescript(schema)
+    
+    # Migration : ajouter la colonne reminder_days si elle n'existe pas
+    try:
+        conn.execute("SELECT reminder_days FROM tasks LIMIT 1")
+    except Exception:
+        # La colonne n'existe pas, l'ajouter
+        conn.execute("ALTER TABLE tasks ADD COLUMN reminder_days INTEGER DEFAULT NULL")
+    
     conn.commit()
     return conn

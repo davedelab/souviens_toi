@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT DEFAULT 'pending',
     priority TEXT DEFAULT 'medium',
     due_at INTEGER,
+    reminder_days INTEGER DEFAULT NULL,
     clip_id INTEGER,
     created_at INTEGER,
     FOREIGN KEY (clip_id) REFERENCES clips(id) ON DELETE SET NULL

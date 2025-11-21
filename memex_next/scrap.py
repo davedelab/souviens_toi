@@ -28,14 +28,41 @@ def capture_article(url: str) -> tuple[str, str, str]:
         m = re.search(r"<title>(.*?)</title>", html, re.I | re.S)
         title = m.group(1).strip() if m else ""
 
-    # nettoyage + corps
+    # nettoyage + corps avec filtrage agressif
     if trafilatura:
-        body_html = trafilatura.extract(
-            html, include_comments=False, include_tables=True,
-            include_links=True, favor_recall=True, output="html"
-        ) or ""
+        try:
+            # Configuration optimisée pour réduire le bruit
+            body_html = trafilatura.extract(
+                html, 
+                include_comments=False, 
+                include_tables=True,
+                include_links=True, 
+                include_images=False,  # Exclure les images
+                favor_precision=True,  # Privilégier la précision vs rappel
+                output_format="html"
+            ) or ""
+        except TypeError:
+            try:
+                body_html = trafilatura.extract(
+                    html, include_comments=False, include_tables=True,
+                    include_links=True, favor_precision=True
+                ) or ""
+                if body_html and not body_html.strip().startswith('<'):
+                    body_html = f"<div>{body_html}</div>"
+            except Exception:
+                body_html = html
     else:
-        body_html = html
+        # Nettoyage manuel si trafilatura absent
+        if BeautifulSoup:
+            soup = BeautifulSoup(html, "html.parser")
+            # Supprimer les éléments de navigation/bruit
+            for tag in soup(["nav", "header", "footer", "aside", "script", "style", "noscript", "iframe"]):
+                tag.decompose()
+            # Chercher le contenu principal
+            main_content = soup.find("main") or soup.find("article") or soup.find("div", class_=lambda x: x and any(word in x.lower() for word in ["content", "article", "post", "entry"]))
+            body_html = str(main_content) if main_content else str(soup.body or soup)
+        else:
+            body_html = html
 
     # markdown
     if mdconv:

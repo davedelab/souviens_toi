@@ -29,7 +29,7 @@ class EditClipWindow(tk.Toplevel):
         self.parent = parent
         self.clip_id = clip_id
         self.title(f"Editer clip #{self.clip_id}")
-        self._fit_geometry(1020, 700)
+        self._fit_geometry(1020, 750)
         self.grab_set()
         self.protocol('WM_DELETE_WINDOW', self._close)
         self.cfg = load_config()
@@ -109,9 +109,10 @@ class EditClipWindow(tk.Toplevel):
         btn("H1", "H1", lambda: self._md_h1(), w=3, bg="#fbbf24")
         btn("H2", "H2", lambda: self._md_h2(), w=3, bg="#f59e0b")
         btn("H3", "H3", lambda: self._md_h3(), w=3, bg="#d97706")
-        btn("â€¢", "Liste", lambda: self._md_bullet(), w=3, bg="#8b5cf6")
+        btn("•", "Liste", lambda: self._md_bullet(), w=3, bg="#8b5cf6")
         btn(">", "Citation", lambda: self._md_quote(), w=3, bg="#ef4444")
         btn("HR", "Ligne horizontale", lambda: self._md_hr(), w=3, bg="#10b981")
+        btn("%", "Préserver (pour résumé IA)", lambda: self._md_preserve(), w=3, bg="#f97316")
         btn("Undo", "Annuler", lambda: self._undo_editor(), w=6)
         btn("Redo", "Rétablir", lambda: self._redo_editor(), w=6)
 
@@ -157,6 +158,7 @@ class EditClipWindow(tk.Toplevel):
         ttk.Button(btn_frame, text="Supprimer", command=self._delete).pack(side='left')
         ttk.Button(btn_frame, text="Prévisualiser MD", command=self._preview_md).pack(side='left', padx=(8,2))
         ttk.Button(btn_frame, text="Aperçu intégré", command=self._preview_md_embedded).pack(side='left')
+        ttk.Button(btn_frame, text="Résumé IA", command=self._ai_smart_summary).pack(side='left', padx=(8,0))
         ttk.Button(btn_frame, text="Enregistrer", command=self._save).pack(side='right')
         ttk.Button(btn_frame, text="Fermer", command=self._close).pack(side='right', padx=6)
 
@@ -246,7 +248,8 @@ class EditClipWindow(tk.Toplevel):
             "</head><body>" + html_body + "</body></html>"
         )
         fd, path = tempfile.mkstemp(suffix='.html')
-        pathlib.Path(fd).write_text(html_doc, encoding='utf-8')
+        pathlib.Path(path).write_text(html_doc, encoding='utf-8')
+        os.close(fd)  # Fermer le descripteur de fichier
         webbrowser.open('file://' + str(pathlib.Path(path).absolute()))
 
     def _preview_md_embedded(self):
@@ -312,6 +315,9 @@ class EditClipWindow(tk.Toplevel):
     def _md_hr(self):
         idx = self.editor.index('insert')
         self.editor.insert(idx, "\n---\n")
+    
+    def _md_preserve(self): 
+        self._md_wrap('%', '%', 'texte à préserver')
     def _md_link(self):
         start, end = self._sel_range()
         txt = ''
@@ -344,7 +350,12 @@ class EditClipWindow(tk.Toplevel):
             return ai_generate_tags(text, lang=lang, count=count)
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
-            existing = [p.strip() for p in (self.tags_var.get() or '').replace(';', ',').split(',') if p.strip()]
+            current_tags = self.tags_var.get() or ''
+            # Effacer "Non traitée par l'IA" s'il est présent
+            if "Non traitée par l'IA" in current_tags or "non traitée par l'IA" in current_tags:
+                existing = []
+            else:
+                existing = [p.strip() for p in current_tags.replace(';', ',').split(',') if p.strip()]
             merged = list(dict.fromkeys(existing + (res or [])))
             self.tags_var.set(', '.join(merged))
             self._toast("Tags IA proposés")
@@ -408,6 +419,44 @@ class EditClipWindow(tk.Toplevel):
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
+    def _ai_smart_summary(self):
+        text = self.editor.get('1.0', 'end').strip()
+        if not text: 
+            mb.showinfo("IA", "Aucun texte à résumer")
+            return
+        
+        # Vérifier s'il y a des sections marquées
+        import re
+        preserved_count = len(re.findall(r'%[^%]+%', text))
+        
+        if preserved_count > 0:
+            msg = f"Sections à préserver détectées: {preserved_count}\n\n"
+            msg += "Les parties entre %...% seront conservées telles quelles.\n"
+            msg += "Le reste sera résumé par l'IA.\n\n"
+            msg += "Continuer?"
+            if not mb.askyesno("Résumé IA", msg):
+                return
+        
+        cfg = load_config()
+        lang = cfg.get('ai_lang', 'fr')
+        
+        def work():
+            from ..ai import ai_smart_summary
+            return ai_smart_summary(text, lang=lang)
+        
+        def done(res, err):
+            if err: 
+                mb.showerror("IA", str(err))
+                return
+            if res:
+                # Remplacer le contenu par le résumé
+                self.editor.delete('1.0', 'end')
+                self.editor.insert('1.0', res)
+                self._toast("Résumé IA appliqué")
+        
+        from ..services.async_worker import runner
+        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+
     # ---------- Pièces jointes ----------
     def _attach_files_to_current_clip(self):
         paths = fd.askopenfilenames(
@@ -415,6 +464,10 @@ class EditClipWindow(tk.Toplevel):
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
+        
+        cfg = load_config()
+        auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
+        
         added = 0
         for p in paths:
             try:
@@ -422,36 +475,93 @@ class EditClipWindow(tk.Toplevel):
                 sha = hashlib.sha256(data).hexdigest()
                 mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
                 title = pathlib.Path(p).name
+                is_pdf = p.lower().endswith('.pdf')
+                
+                # Joindre le fichier d'abord
                 conn = create_conn()
                 conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                              (self.clip_id, title, mime, len(data), sha, data))
                 conn.commit()
                 conn.close()
-
-                def work(mime=mime, blob=data):
-                    from ..ocr import extract_text_from_blob
-                    text = extract_text_from_blob(blob, mime)
-                    if text:
-                        conn = create_conn()
-                        row = conn.execute("SELECT raw_text FROM clips WHERE id=?", (self.clip_id,)).fetchone()
-                        current = (row[0] or '') if row else ''
-                        sep = ("\n" + SEPARATOR + "\n") if current else ''
-                        conn.execute("UPDATE clips SET raw_text=?, summary=? WHERE id=?",
-                                     (current + sep + text, (current + sep + text)[:150] + '...', self.clip_id))
-                        conn.commit()
-                        conn.close()
-                        return True
-                    return False
-                def done(res, err):
-                    self._toast("Fichier joint" + (" et indexé" if res else ''))
-                    self._load_attachments_list()
-                    self._reload_thumbnails()
-                from ..services.async_worker import runner
-                runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+                
+                # Analyse PDF intelligente si activée
+                if is_pdf and auto_analyze_pdf:
+                    self._toast("📄 Analyse du PDF en cours...")
+                    
+                    def work_pdf(pdf_path=p):
+                        from ..pdf_analyzer import analyze_pdf_complete
+                        cfg = load_config()
+                        lang = cfg.get('ai_lang', 'fr')
+                        return analyze_pdf_complete(pdf_path, lang, context="existing")
+                    
+                    def done_pdf(pdf_result, err):
+                        if err:
+                            self._toast(f"❌ Erreur d'analyse PDF: {str(err)}")
+                            # Fallback vers extraction classique
+                            self._attach_file_classic_editor(mime, data)
+                            return
+                        
+                        if pdf_result and pdf_result.get('success'):
+                            # Insérer le résumé dans l'éditeur
+                            formatted_content = pdf_result['formatted_content']
+                            current_content = self.editor.get('1.0', 'end').strip()
+                            
+                            if current_content:
+                                self.editor.insert('end', formatted_content)
+                            else:
+                                self.editor.insert('1.0', formatted_content.lstrip())
+                            
+                            # Mettre à jour la base avec le nouveau contenu
+                            new_content = self.editor.get('1.0', 'end').strip()
+                            conn = create_conn()
+                            conn.execute("UPDATE clips SET raw_text=?, summary=? WHERE id=?",
+                                         (new_content, new_content[:150] + '...', self.clip_id))
+                            conn.commit()
+                            conn.close()
+                            
+                            self._toast("✅ PDF joint avec résumé IA ajouté!")
+                        else:
+                            # Fallback vers extraction classique
+                            self._attach_file_classic_editor(mime, data)
+                        
+                        self._load_attachments_list()
+                        self._reload_thumbnails()
+                    
+                    from ..services.async_worker import runner
+                    runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
+                else:
+                    # Extraction classique pour non-PDF ou si analyse désactivée
+                    self._attach_file_classic_editor(mime, data)
+                
                 added += 1
             except Exception as e:
                 mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added: self._toast(f"{added} fichier(s) joint(s)")
+
+    def _attach_file_classic_editor(self, mime, data):
+        """Extraction classique de texte pour fallback"""
+        def work(mime=mime, blob=data):
+            from ..ocr import extract_text_from_blob
+            text = extract_text_from_blob(blob, mime)
+            if text:
+                conn = create_conn()
+                row = conn.execute("SELECT raw_text FROM clips WHERE id=?", (self.clip_id,)).fetchone()
+                current = (row[0] or '') if row else ''
+                sep = ("\n" + SEPARATOR + "\n") if current else ''
+                conn.execute("UPDATE clips SET raw_text=?, summary=? WHERE id=?",
+                             (current + sep + text, (current + sep + text)[:150] + '...', self.clip_id))
+                conn.commit()
+                conn.close()
+                return True
+            return False
+        
+        def done(res, err):
+            self._toast("Fichier joint" + (" et indexé" if res else ''))
+            self._load_attachments_list()
+            self._reload_thumbnails()
+        
+        from ..services.async_worker import runner
+        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     def _reload_thumbnails(self):
         for w in self._thumb_container.winfo_children(): w.destroy()

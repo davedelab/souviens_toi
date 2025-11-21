@@ -33,6 +33,20 @@ class TasksWindow(tk.Toplevel):
         self.due_min.delete(0, 'end'); self.due_min.insert(0, dt.datetime.now().strftime('%M'))
         self.due_hour.pack(side='left', padx=(4,0))
         self.due_min.pack(side='left', padx=(2,0))
+        
+        # Rappel personnalisé
+        reminder_wrap = ttk.Frame(top)
+        reminder_wrap.pack(side='left', padx=(6,0))
+        ttk.Label(reminder_wrap, text="Rappel:").pack(side='left')
+        self.reminder_days = tk.Spinbox(reminder_wrap, from_=0, to=30, width=4, format="%d")
+        self.reminder_days.delete(0, 'end')
+        # Valeur par défaut depuis la config
+        from ..config import load_config
+        default_days = load_config().get('tasks_reminders_default_days', 1)
+        self.reminder_days.insert(0, str(default_days))
+        self.reminder_days.pack(side='left', padx=(2,0))
+        ttk.Label(reminder_wrap, text="j.").pack(side='left')
+        
         ttk.Button(top, text="Ajouter", command=self._add).pack(side='left', padx=6)
 
         btns = ttk.Frame(self)
@@ -40,11 +54,12 @@ class TasksWindow(tk.Toplevel):
         ttk.Button(btns, text="Terminer", command=self._done).pack(side='left')
         ttk.Button(btns, text="Supprimer", command=self._delete).pack(side='left', padx=6)
         ttk.Button(btns, text="Rafraîchir", command=self._refresh).pack(side='left')
+        ttk.Button(btns, text="Modifier rappel", command=self._set_reminder_selected).pack(side='right', padx=6)
         ttk.Button(btns, text="Définir échéance", command=self._set_due_selected).pack(side='right')
 
-        cols = ("id","title","status","priority","due")
+        cols = ("id","title","status","priority","due","reminder")
         self.tree = ttk.Treeview(self, columns=cols, show='headings', selectmode='browse')
-        for c, lbl, w in (("id","#",60),("title","Titre",260),("status","Statut",80),("priority","Priorité",80),("due","Échéance",100)):
+        for c, lbl, w in (("id","#",50),("title","Titre",220),("status","Statut",70),("priority","Priorité",70),("due","Échéance",100),("reminder","Rappel",60)):
             self.tree.heading(c, text=lbl)
             self.tree.column(c, width=w, anchor='w')
         self.tree.pack(fill='both', expand=True, padx=8, pady=6)
@@ -55,14 +70,27 @@ class TasksWindow(tk.Toplevel):
     def _refresh(self):
         for it in self.tree.get_children(): self.tree.delete(it)
         conn = create_conn()
-        rows = conn.execute("SELECT id, title, status, priority, due_at FROM tasks ORDER BY COALESCE(due_at, 1e18) ASC, id DESC").fetchall()
+        rows = conn.execute("SELECT id, title, status, priority, due_at, reminder_days FROM tasks ORDER BY COALESCE(due_at, 1e18) ASC, id DESC").fetchall()
         conn.close()
-        for rid, title, status, prio, due in rows:
+        for rid, title, status, prio, due, reminder_days in rows:
             due_s = ''
             if due:
-                try: due_s = dt.datetime.fromtimestamp(int(due), tz=dt.timezone.utc).strftime('%Y-%m-%d %H:%M')
-                except Exception: due_s = str(due)
-            self.tree.insert('', 'end', iid=str(rid), values=(rid, title, status, prio, due_s))
+                try: due_s = dt.datetime.fromtimestamp(due, tz=dt.timezone.utc).strftime('%Y-%m-%d %H:%M')
+                except Exception: pass
+            
+            reminder_s = ''
+            if reminder_days is not None:
+                if reminder_days == 0:
+                    reminder_s = 'Aucun'
+                else:
+                    reminder_s = f"{reminder_days}j"
+            else:
+                # Utiliser la valeur par défaut de la config
+                from ..config import load_config
+                default_days = load_config().get('tasks_reminders_default_days', 1)
+                reminder_s = f"{default_days}j*"  # * indique la valeur par défaut
+            
+            self.tree.insert('', 'end', iid=str(rid), values=(rid, title, status, prio, due_s, reminder_s))
 
     def _add(self):
         title = self.new_title.get().strip()
@@ -79,13 +107,22 @@ class TasksWindow(tk.Toplevel):
                 due_dt = dt.datetime.strptime(f"{date_str} {hh:02d}:{mm:02d}", '%Y-%m-%d %H:%M').replace(tzinfo=dt.timezone.utc)
                 due_ts = int(due_dt.timestamp())
         except Exception: due_ts = None
+        
+        # Récupérer le rappel personnalisé
+        try:
+            reminder_days = int(self.reminder_days.get()) if self.reminder_days.get().strip() else None
+            if reminder_days == 0:
+                reminder_days = None  # 0 = pas de rappel
+        except Exception:
+            reminder_days = None
+        
         conn = create_conn()
         if due_ts is not None:
-            conn.execute("INSERT INTO tasks(title, status, priority, due_at, created_at) VALUES(?,?,?,?,?)",
-                         (title, 'pending', 'medium', due_ts, int(dt.datetime.now(dt.timezone.utc).timestamp())))
+            conn.execute("INSERT INTO tasks(title, status, priority, due_at, reminder_days, created_at) VALUES(?,?,?,?,?,?)",
+                         (title, 'pending', 'medium', due_ts, reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
         else:
-            conn.execute("INSERT INTO tasks(title, status, priority, created_at) VALUES(?,?,?,?)",
-                         (title, 'pending', 'medium', int(dt.datetime.now(dt.timezone.utc).timestamp())))
+            conn.execute("INSERT INTO tasks(title, status, priority, reminder_days, created_at) VALUES(?,?,?,?,?)",
+                         (title, 'pending', 'medium', reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
         conn.commit()
         conn.close()
         self.new_title.set('')
@@ -134,6 +171,77 @@ class TasksWindow(tk.Toplevel):
         conn.commit()
         conn.close()
         self._refresh()
+
+    def _set_reminder_selected(self):
+        """Modifier le rappel de la tâche sélectionnée"""
+        sel = self.tree.selection()
+        if not sel: return
+        tid = int(sel[0])
+        
+        # Récupérer le rappel actuel
+        conn = create_conn()
+        row = conn.execute("SELECT title, reminder_days FROM tasks WHERE id=?", (tid,)).fetchone()
+        conn.close()
+        
+        if not row: return
+        title, current_reminder = row
+        
+        # Dialogue pour modifier le rappel
+        dlg = tk.Toplevel(self)
+        dlg.transient(self)
+        dlg.title(f"Rappel - {title}")
+        dlg.geometry("300x150")
+        
+        frm = ttk.Frame(dlg)
+        frm.pack(padx=16, pady=16, fill='both', expand=True)
+        
+        ttk.Label(frm, text="Rappel personnalisé:").pack(anchor='w', pady=(0,8))
+        
+        reminder_frame = ttk.Frame(frm)
+        reminder_frame.pack(fill='x', pady=4)
+        
+        reminder_var = tk.StringVar()
+        if current_reminder is not None:
+            reminder_var.set(str(current_reminder))
+        else:
+            # Valeur par défaut
+            from ..config import load_config
+            default_days = load_config().get('tasks_reminders_default_days', 1)
+            reminder_var.set(str(default_days))
+        
+        reminder_spinbox = tk.Spinbox(reminder_frame, from_=0, to=30, width=6, textvariable=reminder_var, format="%d")
+        reminder_spinbox.pack(side='left')
+        ttk.Label(reminder_frame, text="jour(s) avant l'échéance").pack(side='left', padx=(4,0))
+        
+        ttk.Label(frm, text="(0 = aucun rappel)", font=("TkDefaultFont", 8)).pack(anchor='w', pady=(4,8))
+        
+        # Boutons
+        btns_frame = ttk.Frame(frm)
+        btns_frame.pack(fill='x', pady=(8,0))
+        
+        def apply_reminder():
+            try:
+                new_reminder = int(reminder_var.get())
+                if new_reminder == 0:
+                    new_reminder = None  # Aucun rappel
+                
+                conn = create_conn()
+                conn.execute("UPDATE tasks SET reminder_days=? WHERE id=?", (new_reminder, tid))
+                conn.commit()
+                conn.close()
+                
+                dlg.destroy()
+                self._refresh()
+                
+            except Exception as e:
+                mb.showerror("Erreur", f"Valeur invalide: {e}")
+        
+        ttk.Button(btns_frame, text="Appliquer", command=apply_reminder).pack(side='right')
+        ttk.Button(btns_frame, text="Annuler", command=dlg.destroy).pack(side='right', padx=(0,6))
+        
+        dlg.grab_set()
+        dlg.focus_force()
+        reminder_spinbox.focus()
 
     def _edit_due_inline(self, event):
         region = self.tree.identify("region", event.x, event.y)

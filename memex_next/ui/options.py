@@ -29,7 +29,7 @@ class OptionsWindow(tk.Toplevel):
         ttk.Combobox(lang_row, values=['fr','en'], textvariable=lang_var, state='readonly', width=6).pack(side='left', padx=(8,0))
         ttk.Label(ui, text="Taille des icônes (px)").pack(anchor='w', padx=8, pady=(8,2))
         size_var = tk.IntVar(value=int(self.master.floating_icons_size))
-        tk.Scale(ui, from_=36, to=120, resolution=2, orient='horizontal', variable=size_var).pack(fill='x', padx=12)
+        tk.Scale(ui, from_=50, to=150, resolution=5, orient='horizontal', variable=size_var).pack(fill='x', padx=12)
         ttk.Label(ui, text="Opacité").pack(anchor='w', padx=8, pady=(8,2))
         alpha_var = tk.DoubleVar(value=float(self.master.floating_icons_opacity))
         tk.Scale(ui, from_=0.4, to=0.9, resolution=0.05, orient='horizontal', variable=alpha_var).pack(fill='x', padx=12)
@@ -79,22 +79,70 @@ class OptionsWindow(tk.Toplevel):
         ttk.Entry(r4, textvariable=ai_lang).pack(side='left', fill='x', expand=True)
         r5 = row(ai, "Nb tags visés")
         ttk.Spinbox(r5, from_=1, to=12, textvariable=ai_tag_count, width=6).pack(side='left')
+        
+        # Options PDF
+        ttk.Label(ai, text="Analyse automatique des PDFs", font=("TkDefaultFont", 9, "bold")).pack(anchor='w', padx=8, pady=(16,4))
+        auto_pdf_var = tk.BooleanVar(value=bool(load_config().get('auto_analyze_pdf', True)))
+        ttk.Checkbutton(ai, text="Analyser automatiquement les PDFs avec l'IA", variable=auto_pdf_var).pack(anchor='w', padx=12, pady=2)
+        ttk.Label(ai, text="Génère un résumé IA lors de l'import de fichiers PDF", font=("TkDefaultFont", 8)).pack(anchor='w', padx=24, pady=(0,8))
+        
+        # Options Web
+        ttk.Label(ai, text="Capture web intelligente", font=("TkDefaultFont", 9, "bold")).pack(anchor='w', padx=8, pady=(16,4))
+        auto_web_var = tk.BooleanVar(value=bool(load_config().get('auto_analyze_web', True)))
+        ttk.Checkbutton(ai, text="Analyser automatiquement les pages web avec l'IA", variable=auto_web_var).pack(anchor='w', padx=12, pady=2)
+        ttk.Label(ai, text="Génère un résumé IA lors de la capture d'articles web", font=("TkDefaultFont", 8)).pack(anchor='w', padx=24, pady=(0,4))
+        
+        save_html_var = tk.BooleanVar(value=bool(load_config().get('save_html_source', False)))
+        ttk.Checkbutton(ai, text="Sauvegarder le code HTML source en pièce jointe", variable=save_html_var).pack(anchor='w', padx=12, pady=2)
+        ttk.Label(ai, text="Conserve le HTML brut pour référence (optionnel)", font=("TkDefaultFont", 8)).pack(anchor='w', padx=24, pady=(0,4))
+        
+        def clean_corrupted_html():
+            import tkinter.messagebox as tk_mb
+            from ..db import create_conn
+            conn = create_conn()
+            # Supprimer les fichiers HTML corrompus (taille suspecte ou contenu binaire)
+            corrupted = conn.execute("""
+                SELECT id, filename FROM files 
+                WHERE mime = 'text/html' 
+                AND (size < 100 OR filename LIKE '%.html')
+            """).fetchall()
+            
+            if corrupted:
+                for file_id, filename in corrupted:
+                    conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
+                conn.commit()
+                tk_mb.showinfo("Nettoyage", f"{len(corrupted)} fichiers HTML corrompus supprimés.")
+            else:
+                tk_mb.showinfo("Nettoyage", "Aucun fichier HTML corrompu trouvé.")
+            conn.close()
+        
+        ttk.Button(ai, text="Nettoyer les fichiers HTML corrompus", command=clean_corrupted_html).pack(anchor='w', padx=12, pady=(4,8))
 
         # ---------- Tâches ----------
         tasks_tab = ttk.Frame(nb)
         nb.add(tasks_tab, text='Tâches')
         rem_enabled_var = tk.BooleanVar(value=bool(load_config().get('tasks_reminders_enabled', True)))
         ttk.Checkbutton(tasks_tab, text="Activer les rappels de tâches", variable=rem_enabled_var).pack(anchor='w', padx=8, pady=(10,6))
+        
+        # Paramètres de vérification
         row1 = ttk.Frame(tasks_tab)
         row1.pack(fill='x', padx=8, pady=4)
-        ttk.Label(row1, text="Intervalle vérification (min)", width=24).pack(side='left')
-        rem_interval_var = tk.IntVar(value=int(load_config().get('tasks_reminders_interval_min', 5)))
-        ttk.Spinbox(row1, from_=1, to=120, textvariable=rem_interval_var, width=6).pack(side='left')
+        ttk.Label(row1, text="Intervalle de vérification", width=24).pack(side='left')
+        rem_interval_var = tk.IntVar(value=int(load_config().get('tasks_reminders_interval_hours', 1)))
+        ttk.Spinbox(row1, from_=1, to=24, textvariable=rem_interval_var, width=6).pack(side='left')
+        ttk.Label(row1, text="heures").pack(side='left', padx=(4,0))
+        
+        # Rappels par défaut
+        ttk.Label(tasks_tab, text="Rappels par défaut", font=("TkDefaultFont", 9, "bold")).pack(anchor='w', padx=8, pady=(16,4))
+        
         row2 = ttk.Frame(tasks_tab)
         row2.pack(fill='x', padx=8, pady=4)
-        ttk.Label(row2, text="Anticipation (min)", width=24).pack(side='left')
-        rem_lead_var = tk.IntVar(value=int(load_config().get('tasks_reminders_lead_min', 30)))
-        ttk.Spinbox(row2, from_=0, to=1440, textvariable=rem_lead_var, width=6).pack(side='left')
+        ttk.Label(row2, text="Rappel par défaut", width=24).pack(side='left')
+        rem_lead_var = tk.IntVar(value=int(load_config().get('tasks_reminders_default_days', 1)))
+        ttk.Spinbox(row2, from_=0, to=30, textvariable=rem_lead_var, width=6).pack(side='left')
+        ttk.Label(row2, text="jour(s) avant").pack(side='left', padx=(4,0))
+        
+        ttk.Label(tasks_tab, text="Appliqué aux nouvelles tâches sans rappel personnalisé", font=("TkDefaultFont", 8)).pack(anchor='w', padx=32, pady=(0,8))
 
         # ---------- Catégories ----------
         cats_tab = ttk.Frame(nb)
@@ -197,6 +245,9 @@ class OptionsWindow(tk.Toplevel):
             cfg['deepseek_endpoint'] = endpoint.get().strip() or 'https://api.deepseek.com/v1/chat/completions'
             cfg['ai_lang'] = ai_lang.get().strip() or 'fr'
             cfg['ai_tag_count'] = int(ai_tag_count.get())
+            cfg['auto_analyze_pdf'] = bool(auto_pdf_var.get())
+            cfg['auto_analyze_web'] = bool(auto_web_var.get())
+            cfg['save_html_source'] = bool(save_html_var.get())
             cfg['floating_icons_enabled'] = self.master.floating_icons_enabled
             cfg['floating_icons_size'] = self.master.floating_icons_size
             cfg['floating_icons_opacity'] = self.master.floating_icons_opacity
@@ -207,16 +258,16 @@ class OptionsWindow(tk.Toplevel):
             cfg['tooltips_enabled'] = bool(tooltips_var.get())
             cfg['ui_lang'] = lang_var.get() if lang_var.get() in ('fr','en') else 'fr'
             cfg['tasks_reminders_enabled'] = bool(rem_enabled_var.get())
-            cfg['tasks_reminders_interval_min'] = int(rem_interval_var.get())
-            cfg['tasks_reminders_lead_min'] = int(rem_lead_var.get())
+            cfg['tasks_reminders_interval_hours'] = int(rem_interval_var.get())
+            cfg['tasks_reminders_default_days'] = int(rem_lead_var.get())
             cats_vals = [self._cats_listbox.get(i) for i in range(self._cats_listbox.size())]
             cfg['user_categories'] = [c for c in (v.strip() for v in cats_vals) if c]
             save_config(cfg)
             # appliquer rappels
             try:
                 self.master.reminders_enabled = bool(rem_enabled_var.get())
-                self.master._reminder_interval_ms = max(1, int(rem_interval_var.get())) * 60 * 1000
-                self.master._reminder_lead_sec = max(0, int(rem_lead_var.get())) * 60
+                self.master._reminder_interval_ms = max(1, int(rem_interval_var.get())) * 60 * 60 * 1000  # heures -> ms
+                self.master._reminder_lead_sec = max(0, int(rem_lead_var.get())) * 24 * 60 * 60  # jours -> secondes
                 self.master._check_task_reminders()
             except Exception: pass
             # repositionner flottants

@@ -131,7 +131,6 @@ class SearchWindow(tk.Toplevel):
             rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
         else:
             rows = self._search_sql(conn, query, period)
-        # conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
         if self.read_later_only.get():
             clips = [c for c in clips if c.get('read_later')]
@@ -143,10 +142,23 @@ class SearchWindow(tk.Toplevel):
                    'categories': lambda r: (r.get('categories') or '').lower(), 'tags': lambda r: (r['tags'] or '').lower()}
         clips.sort(key=key_map.get(self._sort_col, key_map['date']), reverse=self._sort_desc)
         self.tree.delete(*self.tree.get_children())
+        # Récupérer le nombre de pièces jointes pour chaque clip
+        clip_ids = [c['id'] for c in clips]
+        if clip_ids:
+            placeholders = ','.join('?' * len(clip_ids))
+            attachment_counts = conn.execute(f"SELECT clip_id, COUNT(*) FROM files WHERE clip_id IN ({placeholders}) GROUP BY clip_id", clip_ids).fetchall()
+            attachment_map = {clip_id: count for clip_id, count in attachment_counts}
+        else:
+            attachment_map = {}
+        
+        conn.close()
+        
         for c in clips:
+            attachment_count = attachment_map.get(c['id'], 0)
+            attachment_display = str(attachment_count) if attachment_count > 0 else ""
             self.tree.insert('', 'end', iid=str(c['id']),
                              values=(dt.datetime.fromtimestamp(c['ts'], tz=dt.timezone.utc).strftime('%Y-%m-%d'),
-                                     c['title'], c.get('categories'), c['tags']))
+                                     c['title'], c.get('categories'), c['tags'], attachment_display))
         to_select = [iid for iid in self.tree.get_children() if iid in prev_selected]
         if to_select:
             self.tree.selection_set(to_select)
@@ -155,6 +167,10 @@ class SearchWindow(tk.Toplevel):
             if children:
                 self.tree.selection_set(children[0])
         self.build_tag_filters()
+
+    def refresh_results(self):
+        """Méthode publique pour rafraîchir les résultats depuis l'extérieur"""
+        self.refresh()
 
     def _fit_geometry(self, desired_w: int, desired_h: int) -> None:
         screen_w = self.winfo_screenwidth()
@@ -384,7 +400,11 @@ class SearchWindow(tk.Toplevel):
                 if not row: continue
                 raw, existing = row
                 tags_ai = ai_generate_tags(raw or '', lang=lang, count=count)
-                existing_list = [p.strip() for p in (existing or '').replace(';', ',').split(',') if p.strip()]
+                # Effacer "Non traitée par l'IA" s'il est présent
+                if existing and ("Non traitée par l'IA" in existing or "non traitée par l'IA" in existing):
+                    existing_list = []
+                else:
+                    existing_list = [p.strip() for p in (existing or '').replace(';', ',').split(',') if p.strip()]
                 merged = list(dict.fromkeys(existing_list + tags_ai))
                 conn.execute("UPDATE clips SET tags=? WHERE id=?", (', '.join(merged), i))
                 updated += 1
