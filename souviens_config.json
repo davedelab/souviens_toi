@@ -1,5 +1,5 @@
 {
-  "deepseek_api_key": "sk-920b74405394433a9656538d3ebef55a",
+  "deepseek_api_key": "",
   "deepseek_model": "deepseek-chat",
   "deepseek_endpoint": "https://api.deepseek.com/v1/chat/completions",
   "ai_lang": "fr",
