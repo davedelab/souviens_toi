@@ -11,8 +11,8 @@ import queue
 from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -395,10 +395,12 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
+            placeholders = ",".join("?" * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text, tags FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            row_map = {r[0]: (r[1], r[2]) for r in rows}
             for i in ids:
-                row = conn.execute("SELECT raw_text, tags FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                raw, existing = row
+                if i not in row_map: continue
+                raw, existing = row_map[i]
                 tags_ai = ai_generate_tags(raw or '', lang=lang, count=count)
                 # Effacer "Non traitée par l'IA" s'il est présent
                 if existing and ("Non traitée par l'IA" in existing or "non traitée par l'IA" in existing):
@@ -426,10 +428,13 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
+            placeholders = ",".join("?" * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            row_map = {r[0]: r[1] for r in rows}
             for i in ids:
-                row = conn.execute("SELECT raw_text FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                cats = ai_generate_categories(row[0] or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
+                if i not in row_map: continue
+                raw = row_map[i]
+                cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
                 conn.execute("UPDATE clips SET categories=? WHERE id=?", (', '.join(cats), i))
                 updated += 1
             conn.commit()
@@ -470,10 +475,12 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
+            placeholders = ",".join("?" * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text, tags FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            row_map = {r[0]: (r[1], r[2]) for r in rows}
             for i in ids:
-                row = conn.execute("SELECT raw_text, tags FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                raw, existing_tags = row
+                if i not in row_map: continue
+                raw, existing_tags = row_map[i]
                 title = ai_generate_title(raw or '', lang=lang, max_len=max_len)
                 tags  = ai_generate_tags(raw or '', lang=lang, count=count)
                 cats  = ai_generate_categories(raw or '', user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
