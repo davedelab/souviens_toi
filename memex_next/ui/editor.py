@@ -1,11 +1,21 @@
 ### memex_next/ui/editor.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.scrolledtext as st
+import tkinter.filedialog as fd
+import tkinter.simpledialog as sd
+import tkinter.messagebox as mb
+import pathlib
+import io
+import hashlib
+import mimetypes
+import os
+import tempfile
+import webbrowser
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..services.export import clip_to_markdown
 from .widgets import Tooltip
 
 try:
@@ -189,7 +199,8 @@ class EditClipWindow(tk.Toplevel):
         conn = create_conn()
         row = conn.execute("SELECT title, raw_text, tags, categories, read_later FROM clips WHERE id=?", (self.clip_id,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         title, raw, tags, cats, read_later = row
         self.title_var.set(title or '')
         self.tags_var.set(tags or '')
@@ -218,7 +229,8 @@ class EditClipWindow(tk.Toplevel):
         self._toast("Clip enregistré")
 
     def _delete(self):
-        if not mb.askyesno("Supprimer", "Supprimer ce clip ?"): return
+        if not mb.askyesno("Supprimer", "Supprimer ce clip ?"):
+            return
         conn = create_conn()
         conn.execute("DELETE FROM clips WHERE id=?", (self.clip_id,))
         conn.commit()
@@ -323,7 +335,8 @@ class EditClipWindow(tk.Toplevel):
         txt = ''
         if start and end: txt = self.editor.get(start, end)
         url = sd.askstring("Lien", "URL:")
-        if not url: return
+        if not url:
+            return
         label = txt or sd.askstring("Lien", "Texte du lien:", initialvalue=url) or url
         if start and end:
             self.editor.delete(start, end)
@@ -406,7 +419,8 @@ class EditClipWindow(tk.Toplevel):
             return {"title": title, "tags": tags, "categories": cats}
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
-            if not res: return
+            if not res:
+                return
             if res.get('title'): self.title_var.set(res['title'])
             if res.get('tags') is not None:
                 existing = [p.strip() for p in (self.tags_var.get() or '').replace(';', ',').split(',') if p.strip()]
@@ -463,7 +477,8 @@ class EditClipWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
-        if not paths: return
+        if not paths:
+            return
         
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
@@ -574,7 +589,7 @@ class EditClipWindow(tk.Toplevel):
         for fid, fn, mime, blob in rows:
             if mime and mime.startswith('image/') and Image is not None and ImageTk is not None:
                 try:
-                    img = Image.open(BytesIO(blob))
+                    img = Image.open(io.BytesIO(blob))
                     img.thumbnail((240, 180))
                     ph = ImageTk.PhotoImage(img)
                     lbl = tk.Label(self._thumb_container, image=ph, cursor='hand2')
@@ -612,24 +627,28 @@ class EditClipWindow(tk.Toplevel):
 
     def _open_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._open_attachment_by_id(fid)
 
     def _export_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._export_attachment_by_id(fid)
 
     def _delete_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._delete_attachment_by_id(fid)
 
     def _open_attachment_by_id(self, fid):
         conn = create_conn()
         row = conn.execute("SELECT filename, data, mime FROM files WHERE id=?", (fid,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         fn, data, mime = row
         ext = pathlib.Path(fn).suffix or '.' + (mime.split('/')[-1] if mime else 'bin')
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
@@ -642,15 +661,18 @@ class EditClipWindow(tk.Toplevel):
         conn = create_conn()
         row = conn.execute("SELECT filename, data FROM files WHERE id=?", (fid,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         fn, data = row
         path = fd.asksaveasfilename(initialfile=fn, defaultextension=pathlib.Path(fn).suffix or '.pdf')
-        if not path: return
+        if not path:
+            return
         pathlib.Path(path).write_bytes(data)
         self._toast("Fichier exporté")
 
     def _delete_attachment_by_id(self, fid):
-        if not mb.askyesno("Supprimer", "Supprimer cette pièce jointe ?"): return
+        if not mb.askyesno("Supprimer", "Supprimer cette pièce jointe ?"):
+            return
         conn = create_conn()
         conn.execute("DELETE FROM files WHERE id=?", (fid,))
         conn.commit()
@@ -659,9 +681,10 @@ class EditClipWindow(tk.Toplevel):
         self._reload_thumbnails()
 
     def _open_image_preview(self, blob, title):
-        if Image is None or ImageTk is None: return
+        if Image is None or ImageTk is None:
+            return
         try:
-            img = Image.open(BytesIO(blob))
+            img = Image.open(io.BytesIO(blob))
             win = tk.Toplevel(self)
             win.title(title)
             win.geometry("900x700")

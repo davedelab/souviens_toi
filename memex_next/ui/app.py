@@ -1,5 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
@@ -111,108 +117,101 @@ class BufferApp(tk.Tk):
         self.floating_icons_y      = int(cfg.get("floating_icons_y", 200))
 
     # ---------- UI ----------
+
+    # ---------- UI ----------
     def build_ui(self):
+        self._build_top_toolbar()
+        self._build_title_frame()
+        self._build_tags_frame()
+        self._build_categories_frame()
+        self._build_markdown_toolbar()
+        self._build_text_area()
+
+    def _make_ui_button(self, parent, text, cmd, w=6, bg="#374151", tip=None, side="left", padx=2, pady=0, use_ttk=False):
+        if use_ttk:
+            b = ttk.Button(parent, text=text, width=w, command=cmd)
+        else:
+            b = tk.Button(parent, text=text, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief="raised", bd=2, highlightthickness=0)
+        b.pack(side=side, padx=padx, pady=pady)
+        if tip and load_config().get("tooltips_enabled", True):
+            Tooltip(b, tip)
+        return b
+
+    def _build_top_toolbar(self):
         top = ttk.Frame(self)
-        top.pack(fill='x', padx=5, pady=5)
-
-        self.pause_btn = ttk.Button(top, text=_tr('pause_short'), width=4, command=self.toggle_pause)
-        self.pause_btn.pack(side='left', padx=2)
-
-        def tbtn(parent, text, cmd, w=6, bg="#374151"):
-            b = tk.Button(parent, text=text, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
-            b.pack(side='left', padx=2)
-            return b
-
-        btn_add = tbtn(top, _tr('add'), self.add_clipboard, w=8, bg="#f59e0b")
-        btn_send = tbtn(top, _tr('save'), self.send_all, w=10, bg="#16a34a")
-        btn_article = tbtn(top, _tr('article'), self.capture_article, w=8, bg="#2563eb")
-        btn_md = tbtn(top, _tr('md'), self.capture_selection_markdown, w=6, bg="#0ea5e9")
-        btn_attach = tbtn(top, _tr('file'), self.attach_file, w=8, bg="#6b7280")
-
-        btn_search = tbtn(top, _tr('search'), self.open_search, w=10, bg="#3b82f6")
-        btn_tasks = tbtn(top, _tr('tasks'), self.open_tasks, w=8, bg="#10b981")
-        btn_opt = tbtn(top, _tr('options'), self.open_options, w=8, bg="#6b7280")
-
-        self.pin_btn = tk.Button(top, text=_tr('pin_on'), width=10, command=self.toggle_always_on_top, bg="#f59e0b", fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
-        self.pin_btn.pack(side='right', padx=2)
-
-        self.state_lbl = ttk.Label(top, text=_tr('state_active'), foreground="green")
-        self.state_lbl.pack(side='left', padx=10)
+        top.pack(fill="x", padx=5, pady=5)
+        self.pause_btn = self._make_ui_button(top, _tr("pause_short"), self.toggle_pause, w=4, use_ttk=True)
+        self._make_ui_button(top, _tr("add"), self.add_clipboard, w=8, bg="#f59e0b", tip=_tr("tt_add"))
+        self._make_ui_button(top, _tr("save"), self.send_all, w=10, bg="#16a34a", tip=_tr("tt_save"))
+        self._make_ui_button(top, _tr("article"), self.capture_article, w=8, bg="#2563eb", tip=_tr("tt_article"))
+        self._make_ui_button(top, _tr("md"), self.capture_selection_markdown, w=6, bg="#0ea5e9", tip=_tr("tt_md"))
+        self._make_ui_button(top, _tr("file"), self.attach_file, w=8, bg="#6b7280", tip=_tr("tt_file"))
+        self._make_ui_button(top, _tr("search"), self.open_search, w=10, bg="#3b82f6", tip=_tr("tt_search"))
+        self._make_ui_button(top, _tr("tasks"), self.open_tasks, w=8, bg="#10b981", tip=_tr("tt_tasks"))
+        self._make_ui_button(top, _tr("options"), self.open_options, w=8, bg="#6b7280", tip=_tr("tt_options"))
+        self.pin_btn = self._make_ui_button(top, _tr("pin_on"), self.toggle_always_on_top, w=10, bg="#f59e0b", tip=_tr("tt_pin"), side="right")
+        self.state_lbl = ttk.Label(top, text=_tr("state_active"), foreground="green")
+        self.state_lbl.pack(side="left", padx=10)
         self.tick_lbl = ttk.Label(top, text="*", foreground="green", font=("Segoe", 14))
 
-        # Tooltips
-        if load_config().get('tooltips_enabled', True):
-            Tooltip(btn_add, _tr('tt_add'))
-            Tooltip(btn_send, _tr('tt_save'))
-            Tooltip(btn_attach, _tr('tt_file'))
-            Tooltip(btn_article, _tr('tt_article'))
-            Tooltip(btn_md, _tr('tt_md'))
-            Tooltip(btn_search, _tr('tt_search'))
-            Tooltip(self.pin_btn, _tr('tt_pin'))
-            Tooltip(btn_tasks, _tr('tt_tasks'))
-            Tooltip(btn_opt, _tr('tt_options'))
-
-        # Titre
+    def _build_title_frame(self):
         frm_title = ttk.LabelFrame(self, text="Titre")
-        frm_title.pack(fill='x', padx=5, pady=2)
+        frm_title.pack(fill="x", padx=5, pady=2)
         self.title_var = tk.StringVar(value="")
-        ttk.Entry(frm_title, textvariable=self.title_var).pack(side='left', fill='x', expand=True, padx=2, pady=2)
-        ttk.Button(frm_title, text="Titre", width=5, command=self.set_title_from_selection_or_clipboard).pack(side='right', padx=2)
-        ttk.Button(frm_title, text="AI", width=3, command=self.ai_title_from_buffer).pack(side='right', padx=2)
+        ttk.Entry(frm_title, textvariable=self.title_var).pack(side="left", fill="x", expand=True, padx=2, pady=2)
+        self._make_ui_button(frm_title, "Titre", self.set_title_from_selection_or_clipboard, w=5, side="right", use_ttk=True)
+        self._make_ui_button(frm_title, "AI", self.ai_title_from_buffer, w=3, side="right", use_ttk=True)
         self.read_later_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frm_title, text="A lire plus tard", variable=self.read_later_var).pack(side='right', padx=6)
+        ttk.Checkbutton(frm_title, text="A lire plus tard", variable=self.read_later_var).pack(side="right", padx=6)
 
-        # Tags
+    def _build_tags_frame(self):
         frm_tags = ttk.LabelFrame(self, text="Tags (pour l'envoi)")
-        frm_tags.pack(fill='x', padx=5, pady=2)
+        frm_tags.pack(fill="x", padx=5, pady=2)
         self.tags_var = tk.StringVar(value="")
         tags_row = ttk.Frame(frm_tags)
-        tags_row.pack(fill='x', padx=2, pady=2)
+        tags_row.pack(fill="x", padx=2, pady=2)
         self.tags_combo = ttk.Combobox(tags_row, textvariable=self.tags_var)
-        self.tags_combo.pack(side='left', fill='x', expand=True)
-        ttk.Button(tags_row, text="AI", width=3, command=self.ai_fill_tags_from_buffer).pack(side='left', padx=4)
+        self.tags_combo.pack(side="left", fill="x", expand=True)
+        self._make_ui_button(tags_row, "AI", self.ai_fill_tags_from_buffer, w=3, padx=4, use_ttk=True)
 
-        # Catégories
+    def _build_categories_frame(self):
         frm_cats = ttk.LabelFrame(self, text="Catégories (0-2)")
-        frm_cats.pack(fill='x', padx=5, pady=2)
+        frm_cats.pack(fill="x", padx=5, pady=2)
         cats_row = ttk.Frame(frm_cats)
-        cats_row.pack(fill='x', padx=2, pady=2)
+        cats_row.pack(fill="x", padx=2, pady=2)
         cfg_c = load_config()
-        self._user_cats_main = cfg_c.get('user_categories', [])
+        self._user_cats_main = cfg_c.get("user_categories", [])
         self.cat1_var_buf = tk.StringVar(value="")
         self.cat2_var_buf = tk.StringVar(value="")
-        state_main = 'readonly' if self._user_cats_main else 'normal'
+        state_main = "readonly" if self._user_cats_main else "normal"
         self.cat1_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat1_var_buf, state=state_main, width=24)
         self.cat2_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat2_var_buf, state=state_main, width=24)
-        self.cat1_cb_buf.pack(side='left', fill='x', expand=True)
-        self.cat2_cb_buf.pack(side='left', fill='x', expand=True, padx=(6,0))
-        ttk.Button(cats_row, text="AI", width=3, command=self.ai_fill_categories_from_buffer).pack(side='left', padx=6)
+        self.cat1_cb_buf.pack(side="left", fill="x", expand=True)
+        self.cat2_cb_buf.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        self._make_ui_button(cats_row, "AI", self.ai_fill_categories_from_buffer, w=3, padx=6, use_ttk=True)
 
-        # Toolbar Markdown
+    def _build_markdown_toolbar(self):
         tb = ttk.Frame(self)
-        tb.pack(fill='x', padx=5, pady=(2,2))
-        def btn(parent, txt, tip, cmd, w=4, bg="#374151"):
-            b = tk.Button(parent, text=txt, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
-            b.pack(side='left', padx=2)
-            Tooltip(b, tip)
-            return b
-        btn(tb, "B", "Gras (Ctrl+B)", lambda: self._md_bold_buf(), w=3, bg="#2563eb")
-        btn(tb, "I", "Italique (Ctrl+I)", lambda: self._md_italic_buf(), w=3, bg="#0ea5e9")
-        btn(tb, "Link", "Lien (Ctrl+K)", lambda: self._md_link_buf(), w=5, bg="#22c55e")
-        btn(tb, "`", "Code inline", lambda: self._md_code_inline_buf(), w=3, bg="#6b7280")
-        btn(tb, "```", "Bloc de code", lambda: self._md_code_block_buf(), w=5, bg="#6b7280")
-        btn(tb, "H1", "Titre niveau 1 (Ctrl+1)", lambda: self._md_h1_buf(), w=4, bg="#fbbf24")
-        btn(tb, "H2", "Titre niveau 2 (Ctrl+2)", lambda: self._md_h2_buf(), w=4, bg="#f59e0b")
-        btn(tb, "H3", "Titre niveau 3 (Ctrl+3)", lambda: self._md_h3_buf(), w=4, bg="#d97706")
-        btn(tb, "*", "Liste à  puces", lambda: self._md_bullet_buf(), w=3, bg="#8b5cf6")
-        btn(tb, ">", "Citation", lambda: self._md_quote_buf(), w=3, bg="#ef4444")
-        btn(tb, "HR", "Ligne horizontale", lambda: self._md_hr_buf(), w=4, bg="#10b981")
-        btn(tb, "Undo", "Annuler (Ctrl+Z)", lambda: self._undo_buf(), w=5, bg="#374151")
-        btn(tb, "Redo", "Rétablir (Ctrl+Y)", lambda: self._redo_buf(), w=5, bg="#374151")
+        tb.pack(fill="x", padx=5, pady=(2, 2))
+        self._make_ui_button(tb, "B", self._md_bold_buf, w=3, bg="#2563eb", tip="Gras (Ctrl+B)")
+        self._make_ui_button(tb, "I", self._md_italic_buf, w=3, bg="#0ea5e9", tip="Italique (Ctrl+I)")
+        self._make_ui_button(tb, "Link", self._md_link_buf, w=5, bg="#22c55e", tip="Lien (Ctrl+K)")
+        self._make_ui_button(tb, "`", self._md_code_inline_buf, w=3, bg="#6b7280", tip="Code inline")
+        self._make_ui_button(tb, "```", self._md_code_block_buf, w=5, bg="#6b7280", tip="Bloc de code")
+        self._make_ui_button(tb, "H1", self._md_h1_buf, w=4, bg="#fbbf24", tip="Titre niveau 1 (Ctrl+1)")
+        self._make_ui_button(tb, "H2", self._md_h2_buf, w=4, bg="#f59e0b", tip="Titre niveau 2 (Ctrl+2)")
+        self._make_ui_button(tb, "H3", self._md_h3_buf, w=4, bg="#d97706", tip="Titre niveau 3 (Ctrl+3)")
+        self._make_ui_button(tb, "*", self._md_bullet_buf, w=3, bg="#8b5cf6", tip="Liste à puces")
+        self._make_ui_button(tb, ">", self._md_quote_buf, w=3, bg="#ef4444", tip="Citation")
+        self._make_ui_button(tb, "HR", self._md_hr_buf, w=4, bg="#10b981", tip="Ligne horizontale")
+        self._make_ui_button(tb, "Undo", self._undo_buf, w=5, bg="#374151", tip="Annuler (Ctrl+Z)")
+        self._make_ui_button(tb, "Redo", self._redo_buf, w=5, bg="#374151", tip="Rétablir (Ctrl+Y)")
 
-        self.text_area = scrolledtext.ScrolledText(self, wrap='word', undo=True, autoseparators=True, maxundo=1000)
-        self.text_area.pack(fill='both', expand=True, padx=5, pady=5)
+    def _build_text_area(self):
+        self.text_area = scrolledtext.ScrolledText(self, wrap="word", undo=True, autoseparators=True, maxundo=1000)
+        self.text_area.pack(fill="both", expand=True, padx=5, pady=5)
         self._bind_editor_shortcuts()
+
 
     # ---------- clipboard ----------
     def start_clip_watcher(self):
@@ -359,7 +358,8 @@ class BufferApp(tk.Tk):
             txt = self.text_area.get(start, end)
         from tkinter import simpledialog
         url = simpledialog.askstring("Lien", "URL:")
-        if not url: return
+        if not url:
+            return
         label = txt or simpledialog.askstring("Lien", "Texte du lien:", initialvalue=url) or url
         if start and end:
             self.text_area.delete(start, end)
@@ -400,7 +400,6 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
@@ -422,7 +421,6 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
@@ -471,7 +469,8 @@ class BufferApp(tk.Tk):
         except Exception:
             default_url = self.last_source_url or ""
         url = simpledialog.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
-        if not url: return
+        if not url:
+            return
 
         cfg = load_config()
         auto_analyze_web = cfg.get('auto_analyze_web', True)
@@ -539,7 +538,7 @@ class BufferApp(tk.Tk):
                     if hasattr(self, '_search_win') and self._search_win:
                         try:
                             self._search_win.refresh_results()
-                        except:
+                        except Exception:
                             pass
                     
                     # Ouvrir l'éditeur
@@ -601,7 +600,7 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
+            from ..ai import ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -644,14 +643,16 @@ class BufferApp(tk.Tk):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
-        if not paths: return
+        if not paths:
+            return
         
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id = None
         
         for p in paths:
             try:
@@ -695,8 +696,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id is None:
+                                self._first_clip_id = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -710,7 +711,7 @@ class BufferApp(tk.Tk):
                             if hasattr(self, '_search_win') and self._search_win:
                                 try:
                                     self._search_win.refresh_results()
-                                except:
+                                except Exception:
                                     pass
                         
                         else:
@@ -732,8 +733,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -745,7 +746,7 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
+        if not getattr(self, '_first_clip_id', None):
             self._first_clip_id = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
@@ -788,8 +789,10 @@ class BufferApp(tk.Tk):
 
     # ---------- floating icons ----------
     def _create_floating_icons(self):
-        if not self.floating_icons_enabled: return
-        if self._float_win and self._float_win.winfo_exists(): return
+        if not self.floating_icons_enabled:
+            return
+        if self._float_win and self._float_win.winfo_exists():
+            return
         win = tk.Toplevel(self)
         self._float_win = win
         win.overrideredirect(True)
@@ -874,7 +877,8 @@ class BufferApp(tk.Tk):
         self._float_pos = (self._float_win.winfo_x(), self._float_win.winfo_y())
 
     def _float_on_drag(self, event):
-        if not hasattr(self, '_drag_start'): return
+        if not hasattr(self, '_drag_start'):
+            return
         dx = event.x_root - self._drag_start[0]
         dy = event.y_root - self._drag_start[1]
         x = max(0, self._float_pos[0] + dx)
@@ -966,7 +970,8 @@ class BufferApp(tk.Tk):
             conn.close()
             
             for tid, title, due_at, reminder_days in rows:
-                if tid in self._reminded_ids: continue
+                if tid in self._reminded_ids:
+                    continue
                 
                 # Calculer le délai de rappel pour cette tâche
                 if reminder_days is not None:
@@ -1017,14 +1022,16 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
         MOD_SHIFT   = 0x0004
         VK_M = 0x4D
         WM_HOTKEY = 0x0312
-        if not user32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_SHIFT, VK_M): return
+        if not user32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_SHIFT, VK_M):
+            return
         def loop():
             msg = wt.MSG()
             while True:
