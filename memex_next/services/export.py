@@ -13,7 +13,7 @@ def clip_to_markdown(clip: Dict[str, Any]) -> str:
     body    = clip.get("raw_text", "")
     front   = [
         "---",
-        f'title: "{title.replace('"', "'")}"',
+        f"title: \"{title.replace('\"', \"'\")}\"",
         f'date: "{date}"',
         f'tags: [{", ".join(tags)}]',
         f'categories: [{", ".join(cats)}]',
