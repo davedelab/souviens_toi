@@ -8,11 +8,10 @@ import datetime as dt
 import json
 import pathlib
 import queue
-from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -197,39 +196,68 @@ class SearchWindow(tk.Toplevel):
         return cur.fetchall()
 
     def build_tag_filters(self):
-        for w in self.tags_filter_frame.winfo_children(): w.destroy()
+        for w in self.tags_filter_frame.winfo_children():
+            w.destroy()
         conn = create_conn()
-        rows = conn.execute("SELECT tags FROM clips WHERE tags IS NOT NULL AND tags <> ''").fetchall()
+        query = """
+        WITH RECURSIVE split(item, rest) AS (
+          SELECT
+            trim(substr(tags, 1, instr(tags || ',', ',') - 1)),
+            substr(tags, instr(tags || ',', ',') + 1)
+          FROM (SELECT replace(tags, ';', ',') AS tags FROM clips WHERE tags IS NOT NULL AND tags <> '')
+          UNION ALL
+          SELECT
+            trim(substr(rest, 1, instr(rest || ',', ',') - 1)),
+            substr(rest, instr(rest || ',', ',') + 1)
+          FROM split
+          WHERE rest <> ''
+        )
+        SELECT item, COUNT(*) as cnt
+        FROM split
+        WHERE item <> ''
+        GROUP BY item
+        ORDER BY cnt DESC
+        LIMIT 20;
+        """
+        rows = conn.execute(query).fetchall()
         conn.close()
-        all_tags = set()
-        for (t,) in rows:
-            for part in str(t).replace(';', ',').split(','):
-                tag = part.strip()
-                if tag: all_tags.add(tag)
-        if not all_tags: return
-        # top 20
-        counts = {}
-        conn = create_conn()
-        for tag in all_tags:
-            counts[tag] = conn.execute("SELECT COUNT(*) FROM clips WHERE tags LIKE ?", (f'%{tag}%',)).fetchone()[0]
-        conn.close()
-        for tag, _ in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20]:
-            btn = tk.Button(self.tags_filter_frame, text=f"{tag} ({counts[tag]})", relief='raised', bd=1, padx=4, pady=2,
+        if not rows:
+            return
+        for tag, count in rows:
+            btn = tk.Button(self.tags_filter_frame, text=f"{tag} ({count})", relief='raised', bd=1, padx=4, pady=2,
                             command=lambda t=tag: self.toggle_tag_filter(t))
             btn.config(bg='#3b82f6' if tag in self.active_tag_filters else '#e5e7eb', fg='white' if tag in self.active_tag_filters else 'black')
             btn.pack(side='left', padx=2, pady=2)
 
     def build_category_filters(self):
-        for w in self.cats_filter_frame.winfo_children(): w.destroy()
+        for w in self.cats_filter_frame.winfo_children():
+            w.destroy()
         user_cats = load_config().get('user_categories', [])
-        if not user_cats: return
-        counts = {}
+        if not user_cats:
+            return
         conn = create_conn()
-        for cat in user_cats:
-            counts[cat] = conn.execute("SELECT COUNT(*) FROM clips WHERE categories LIKE ?", (f"%{cat}%",)).fetchone()[0]
+        query = """
+        WITH RECURSIVE split(item, rest) AS (
+          SELECT
+            trim(substr(categories, 1, instr(categories || ',', ',') - 1)),
+            substr(categories, instr(categories || ',', ',') + 1)
+          FROM (SELECT categories FROM clips WHERE categories IS NOT NULL AND categories <> '')
+          UNION ALL
+          SELECT
+            trim(substr(rest, 1, instr(rest || ',', ',') - 1)),
+            substr(rest, instr(rest || ',', ',') + 1)
+          FROM split
+          WHERE rest <> ''
+        )
+        SELECT item, COUNT(*) as cnt
+        FROM split
+        WHERE item <> ''
+        GROUP BY item;
+        """
+        counts_map = dict(conn.execute(query).fetchall())
         conn.close()
         for cat in user_cats:
-            btn = tk.Button(self.cats_filter_frame, text=f"{cat} ({counts.get(cat,0)})", relief='raised', bd=1, padx=4, pady=2,
+            btn = tk.Button(self.cats_filter_frame, text=f"{cat} ({counts_map.get(cat,0)})", relief='raised', bd=1, padx=4, pady=2,
                             command=lambda t=cat: self.toggle_category_filter(t))
             btn.config(bg='#10b981' if cat in self.active_category_filters else '#e5e7eb', fg='white' if cat in self.active_category_filters else 'black')
             btn.pack(side='left', padx=2, pady=2)
@@ -500,7 +528,8 @@ class SearchWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         for p in paths:
             try:
