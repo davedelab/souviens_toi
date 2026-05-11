@@ -1,4 +1,3 @@
-### memex_next/ui/widgets.py
 import tkinter as tk
 import tkinter.ttk as ttk
 

@@ -1,4 +1,3 @@
-### memex_next/ai.py
 import json
 import urllib.request
 import urllib.error

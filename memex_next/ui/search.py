@@ -1,4 +1,3 @@
-### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
 import datetime as dt

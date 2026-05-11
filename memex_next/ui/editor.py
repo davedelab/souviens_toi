@@ -1,4 +1,3 @@
-### memex_next/ui/editor.py
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.scrolledtext as st

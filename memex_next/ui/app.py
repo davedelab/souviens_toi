@@ -1,4 +1,3 @@
-### memex_next/ui/app.py
 import tkinter as tk
 import tkinter.ttk as ttk
 import threading

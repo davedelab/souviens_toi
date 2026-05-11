@@ -1,4 +1,3 @@
-### memex_next/scrap.py
 import urllib.request
 
 try:

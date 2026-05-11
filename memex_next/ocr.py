@@ -1,4 +1,3 @@
-### memex_next/ocr.py
 from io import BytesIO
 
 

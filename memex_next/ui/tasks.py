@@ -1,4 +1,3 @@
-### memex_next/ui/tasks.py
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.messagebox as mb

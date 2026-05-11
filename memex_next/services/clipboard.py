@@ -1,4 +1,3 @@
-### memex_next/services/clipboard.py
 import sys
 import subprocess
 

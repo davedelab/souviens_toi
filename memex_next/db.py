@@ -1,4 +1,3 @@
-### memex_next/db.py
 import sqlite3
 import pathlib
 from .config import DB_FILE

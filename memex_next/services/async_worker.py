@@ -1,4 +1,3 @@
-### memex_next/services/async_worker.py
 import queue
 import threading
 

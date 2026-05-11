@@ -1,4 +1,3 @@
-### memex_next/services/import.py
 import json
 import pathlib
 import sqlite3
