@@ -19,18 +19,22 @@ mock_modules = [
 for mod in mock_modules:
     sys.modules[mod] = MagicMock()
 
-from memex_next.services.export import safe_filename
+from memex_next.services.export import safe_filename  # noqa: E402
+
 
 def test_safe_filename_normal():
     assert safe_filename("simple_filename") == "simple_filename"
+
 
 def test_safe_filename_invalid_chars():
     # \/:*?"<>| are invalid. + in regex means consecutive ones are replaced by a single _
     assert safe_filename("file/with:invalid*chars?\"<>|") == "file_with_invalid_chars_"
 
+
 def test_safe_filename_consecutive_invalid():
     assert safe_filename("a:::b") == "a_b"
     assert safe_filename("a/\\/b") == "a_b"
+
 
 def test_safe_filename_long_string():
     long_str = "A" * 100
@@ -38,12 +42,15 @@ def test_safe_filename_long_string():
     assert len(result) == 80
     assert result == "A" * 80
 
+
 def test_safe_filename_empty():
     assert safe_filename("") == "note"
+
 
 def test_safe_filename_only_invalid():
     # "://" becomes "_" because of the +
     assert safe_filename("://") == "_"
+
 
 def test_safe_filename_results_in_underscore():
     assert safe_filename(":") == "_"
