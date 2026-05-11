@@ -1,5 +1,7 @@
 ### memex_next/ai.py
-import json, urllib.request, urllib.error
+import json
+import urllib.request
+import urllib.error
 from .config import load_config
 
 ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
