@@ -11,9 +11,10 @@ def clip_to_markdown(clip: Dict[str, Any]) -> str:
     typ     = clip.get("type", "note")
     source  = clip.get("source", "")
     body    = clip.get("raw_text", "")
+    title_escaped = title.replace('"', "'")
     front   = [
         "---",
-        f'title: "{title.replace('"', "'")}"',
+        f'title: "{title_escaped}"',
         f'date: "{date}"',
         f'tags: [{", ".join(tags)}]',
         f'categories: [{", ".join(cats)}]',
