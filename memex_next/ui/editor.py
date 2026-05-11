@@ -295,9 +295,14 @@ class EditClipWindow(tk.Toplevel):
             self.editor.insert(cur, prefix)
             cur = self.editor.index(cur + ' +1line')
 
-    def _md_bold(self): self._md_wrap('**', '**', 'texte')
-    def _md_italic(self): self._md_wrap('*', '*', 'texte')
-    def _md_code_inline(self): self._md_wrap('`', '`', 'code')
+    def _md_bold(self):
+        self._md_wrap('**', '**', 'texte')
+
+    def _md_italic(self):
+        self._md_wrap('*', '*', 'texte')
+
+    def _md_code_inline(self):
+        self._md_wrap('`', '`', 'code')
     def _md_code_block(self):
         start, end = self._sel_range()
         if not start or not end:
@@ -307,11 +312,20 @@ class EditClipWindow(tk.Toplevel):
         text = self.editor.get(start, end)
         self.editor.delete(start, end)
         self.editor.insert(start, f"```\n{text}\n```\n")
-    def _md_h1(self): self._md_prefix_lines('# ')
-    def _md_h2(self): self._md_prefix_lines('## ')
-    def _md_h3(self): self._md_prefix_lines('### ')
-    def _md_bullet(self): self._md_prefix_lines('- ')
-    def _md_quote(self): self._md_prefix_lines('> ')
+    def _md_h1(self):
+        self._md_prefix_lines('# ')
+
+    def _md_h2(self):
+        self._md_prefix_lines('## ')
+
+    def _md_h3(self):
+        self._md_prefix_lines('### ')
+
+    def _md_bullet(self):
+        self._md_prefix_lines('- ')
+
+    def _md_quote(self):
+        self._md_prefix_lines('> ')
     def _md_hr(self):
         idx = self.editor.index('insert')
         self.editor.insert(idx, "\n---\n")

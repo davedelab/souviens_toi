@@ -910,9 +910,16 @@ class BufferApp(tk.Tk):
         except Exception:
             pass
 
-    def _float_green_click(self): self.deiconify(); self.lift(); self.focus_force()
-    def _float_red_click(self): self.withdraw()
-    def _float_search_click(self): self.open_search()
+    def _float_green_click(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _float_red_click(self):
+        self.withdraw()
+
+    def _float_search_click(self):
+        self.open_search()
 
     # ---------- divers ----------
     def show_toast(self, text):

@@ -1,14 +1,12 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
-import tkinter.filedialog as fd
-import tkinter.messagebox as mb
-import tkinter.simpledialog as sd
 import datetime as dt
 import json
 import pathlib
 import queue
-from typing import List, Dict, Any
+import tkinter.messagebox as mb
+import tkinter.filedialog as fd
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
@@ -29,7 +27,8 @@ class SearchWindow(tk.Toplevel):
         self.title("Recherche Souviens-toi")
         self._fit_geometry(1200, 700)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        if not self.master.paused: self.master.toggle_pause()
+        if not self.master.paused:
+            self.master.toggle_pause()
 
         self.period_var = tk.StringVar(value="")
         self.query_var = tk.StringVar()
@@ -250,8 +249,13 @@ class SearchWindow(tk.Toplevel):
         save_config(cfg)
         self.refresh()
 
-    def clear_tag_filters(self): self.active_tag_filters.clear(); self.refresh()
-    def clear_category_filters(self): self.active_category_filters.clear(); self.refresh()
+    def clear_tag_filters(self):
+        self.active_tag_filters.clear()
+        self.refresh()
+
+    def clear_category_filters(self):
+        self.active_category_filters.clear()
+        self.refresh()
     def clear_all_filters(self):
         self.query_var.set("")
         self.period_var.set("")
@@ -273,7 +277,7 @@ class SearchWindow(tk.Toplevel):
         sel = self.tree.selection()
         if not sel: return
         clip_id = int(sel[0])
-        if not tk.messagebox.askyesno("Confirmation", "Supprimer ce clip ?"): return
+        if not mb.askyesno("Confirmation", "Supprimer ce clip ?"): return
         conn = create_conn()
         conn.execute("DELETE FROM clips WHERE id=?", (clip_id,))
         conn.commit()
@@ -283,7 +287,7 @@ class SearchWindow(tk.Toplevel):
     def bulk_delete_selected(self):
         sels = self.tree.selection()
         if not sels: return
-        if not tk.messagebox.askyesno("Confirmation", f"Supprimer {len(sels)} éléments ?"): return
+        if not mb.askyesno("Confirmation", f"Supprimer {len(sels)} éléments ?"): return
         ids = [int(i) for i in sels]
         conn = create_conn()
         conn.executemany("DELETE FROM clips WHERE id=?", [(i,) for i in ids])
@@ -300,20 +304,20 @@ class SearchWindow(tk.Toplevel):
         rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        folder = tk.filedialog.askdirectory()
+        folder = fd.askdirectory()
         if not folder: return
         count = export_selected_md(clips, pathlib.Path(folder), load_config())
-        tk.messagebox.showinfo("Export", f"{count} fichiers Markdown exportés.")
+        mb.showinfo("Export", f"{count} fichiers Markdown exportés.")
 
     def export_all_md(self):
         conn = create_conn()
         rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        folder = tk.filedialog.askdirectory()
+        folder = fd.askdirectory()
         if not folder: return
         count = export_selected_md(clips, pathlib.Path(folder), load_config())
-        tk.messagebox.showinfo("Export", f"{count} fichiers Markdown exportés.")
+        mb.showinfo("Export", f"{count} fichiers Markdown exportés.")
 
     def export_selected_json(self):
         sels = self.tree.selection()
@@ -323,31 +327,31 @@ class SearchWindow(tk.Toplevel):
         rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
+        path = fd.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
-        tk.messagebox.showinfo("Export", "Sélection exportée en JSON.")
+        mb.showinfo("Export", "Sélection exportée en JSON.")
 
     def export_all_json(self):
         conn = create_conn()
         rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
+        path = fd.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
-        tk.messagebox.showinfo("Export", "Base complète exportée en JSON.")
+        mb.showinfo("Export", "Base complète exportée en JSON.")
 
     def import_json(self):
-        path = tk.filedialog.askopenfilename(filetypes=[["JSON","*.json"]])
+        path = fd.askopenfilename(filetypes=[["JSON","*.json"]])
         if not path: return
         from ..services.importer import import_json as imp
         try:
             imp(pathlib.Path(path))
             self.refresh()
-            tk.messagebox.showinfo("Import", "Fichier JSON importé.")
+            mb.showinfo("Import", "Fichier JSON importé.")
         except Exception as e:
-            tk.messagebox.showerror("Erreur", f"Import échoué: {e}")
+            mb.showerror("Erreur", f"Import échoué: {e}")
 
     # ---------- IA batch ----------
     def ai_tags_missing(self):
@@ -421,7 +425,6 @@ class SearchWindow(tk.Toplevel):
                 conn.commit()
             conn.close()
             return len(updates)
-        from ..services.async_worker import runner
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
         self.master.show_toast("Tags IA en arrière-plan¦")
     def ai_cats_selected(self):
@@ -430,7 +433,7 @@ class SearchWindow(tk.Toplevel):
         cfg = load_config()
         user_cats = cfg.get('user_categories', [])
         if not user_cats:
-            tk.messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
+            mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
         ids = [int(i) for i in sels]
 
@@ -457,7 +460,7 @@ class SearchWindow(tk.Toplevel):
         cfg = load_config()
         user_cats = cfg.get('user_categories', [])
         if not user_cats:
-            tk.messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
+            mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
 
         def work():
