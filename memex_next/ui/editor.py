@@ -3,7 +3,7 @@ import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.fi
 import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, save_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
 from ..services.export import clip_to_markdown
 from .widgets import Tooltip
@@ -20,6 +20,8 @@ try:
     from PIL import Image, ImageTk
 except Exception:
     Image = ImageTk = None
+
+from io import BytesIO
 
 OPEN_EDITORS: Dict[int, "EditClipWindow"] = {}
 

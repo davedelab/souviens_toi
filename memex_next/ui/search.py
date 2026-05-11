@@ -11,7 +11,7 @@ import queue
 from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
 from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner

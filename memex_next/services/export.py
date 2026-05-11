@@ -5,6 +5,7 @@ from ..models import Clip
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:
     title   = clip.get("title", "")
+    safe_title = title.replace('"', "'")
     date    = dt.datetime.fromtimestamp(clip.get("ts", 0), tz=dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
     tags    = [t.strip() for t in clip.get("tags", "").replace(";", ",").split(",") if t.strip()]
     cats    = [c.strip() for c in clip.get("categories", "").split(",") if c.strip()]
@@ -13,7 +14,7 @@ def clip_to_markdown(clip: Dict[str, Any]) -> str:
     body    = clip.get("raw_text", "")
     front   = [
         "---",
-        f'title: "{title.replace('"', "'")}"',
+        f'title: "{safe_title}"',
         f'date: "{date}"',
         f'tags: [{", ".join(tags)}]',
         f'categories: [{", ".join(cats)}]',
