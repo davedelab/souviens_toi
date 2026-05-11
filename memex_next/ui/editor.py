@@ -1,9 +1,9 @@
 ### memex_next/ui/editor.py
 import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser, io
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, save_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
 from ..services.export import clip_to_markdown
 from .widgets import Tooltip
@@ -295,9 +295,14 @@ class EditClipWindow(tk.Toplevel):
             self.editor.insert(cur, prefix)
             cur = self.editor.index(cur + ' +1line')
 
-    def _md_bold(self): self._md_wrap('**', '**', 'texte')
-    def _md_italic(self): self._md_wrap('*', '*', 'texte')
-    def _md_code_inline(self): self._md_wrap('`', '`', 'code')
+    def _md_bold(self):
+        self._md_wrap('**', '**', 'texte')
+
+    def _md_italic(self):
+        self._md_wrap('*', '*', 'texte')
+
+    def _md_code_inline(self):
+        self._md_wrap('`', '`', 'code')
     def _md_code_block(self):
         start, end = self._sel_range()
         if not start or not end:
@@ -307,11 +312,20 @@ class EditClipWindow(tk.Toplevel):
         text = self.editor.get(start, end)
         self.editor.delete(start, end)
         self.editor.insert(start, f"```\n{text}\n```\n")
-    def _md_h1(self): self._md_prefix_lines('# ')
-    def _md_h2(self): self._md_prefix_lines('## ')
-    def _md_h3(self): self._md_prefix_lines('### ')
-    def _md_bullet(self): self._md_prefix_lines('- ')
-    def _md_quote(self): self._md_prefix_lines('> ')
+    def _md_h1(self):
+        self._md_prefix_lines('# ')
+
+    def _md_h2(self):
+        self._md_prefix_lines('## ')
+
+    def _md_h3(self):
+        self._md_prefix_lines('### ')
+
+    def _md_bullet(self):
+        self._md_prefix_lines('- ')
+
+    def _md_quote(self):
+        self._md_prefix_lines('> ')
     def _md_hr(self):
         idx = self.editor.index('insert')
         self.editor.insert(idx, "\n---\n")
@@ -574,7 +588,7 @@ class EditClipWindow(tk.Toplevel):
         for fid, fn, mime, blob in rows:
             if mime and mime.startswith('image/') and Image is not None and ImageTk is not None:
                 try:
-                    img = Image.open(BytesIO(blob))
+                    img = Image.open(io.BytesIO(blob))
                     img.thumbnail((240, 180))
                     ph = ImageTk.PhotoImage(img)
                     lbl = tk.Label(self._thumb_container, image=ph, cursor='hand2')
@@ -661,7 +675,7 @@ class EditClipWindow(tk.Toplevel):
     def _open_image_preview(self, blob, title):
         if Image is None or ImageTk is None: return
         try:
-            img = Image.open(BytesIO(blob))
+            img = Image.open(io.BytesIO(blob))
             win = tk.Toplevel(self)
             win.title(title)
             win.geometry("900x700")
