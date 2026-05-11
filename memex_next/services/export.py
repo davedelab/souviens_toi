@@ -5,15 +5,15 @@ import datetime as dt
 from typing import List, Dict, Any
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:
-    title = clip.get("title", "")
+    title   = clip.get("title", "")
     clean_title = title.replace('"', "'")
-    date = dt.datetime.fromtimestamp(clip.get("ts", 0), tz=dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
-    tags = [t.strip() for t in clip.get("tags", "").replace(";", ",").split(",") if t.strip()]
-    cats = [c.strip() for c in clip.get("categories", "").split(",") if c.strip()]
-    typ = clip.get("type", "note")
-    source = clip.get("source", "")
-    body = clip.get("raw_text", "")
-    front = [
+    date    = dt.datetime.fromtimestamp(clip.get("ts", 0), tz=dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
+    tags    = [t.strip() for t in clip.get("tags", "").replace(";", ",").split(",") if t.strip()]
+    cats    = [c.strip() for c in clip.get("categories", "").split(",") if c.strip()]
+    typ     = clip.get("type", "note")
+    source  = clip.get("source", "")
+    body    = clip.get("raw_text", "")
+    front   = [
         "---",
         f'title: "{clean_title}"',
         f'date: "{date}"',
