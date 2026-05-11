@@ -1,7 +1,7 @@
 ### memex_next/ui/editor.py
 import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
 from io import BytesIO
+import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
 from typing import Optional, Dict, Any
 from ..db import create_conn
 from ..config import load_config, save_config, SEPARATOR

@@ -166,7 +166,6 @@ class OptionsWindow(tk.Toplevel):
             name = sd.askstring("Nouvelle catégorie", "Nom de la catégorie:")
             if name:
                 self._cats_listbox.insert('end', name.strip())
-
         def rename_cat():
             sel = self._cats_listbox.curselection()
             if not sel:
@@ -176,13 +175,11 @@ class OptionsWindow(tk.Toplevel):
             if name is not None:
                 self._cats_listbox.delete(sel[0])
                 self._cats_listbox.insert(sel[0], name.strip())
-
         def delete_cat():
             sel = self._cats_listbox.curselection()
             if not sel:
                 return
             self._cats_listbox.delete(sel[0])
-
         def move_up():
             sel = self._cats_listbox.curselection()
             if not sel or sel[0] == 0:
@@ -192,7 +189,6 @@ class OptionsWindow(tk.Toplevel):
             self._cats_listbox.delete(i)
             self._cats_listbox.insert(i-1, val)
             self._cats_listbox.selection_set(i-1)
-
         def move_down():
             sel = self._cats_listbox.curselection()
             if not sel or sel[0] == self._cats_listbox.size()-1:
