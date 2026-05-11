@@ -675,6 +675,7 @@ class BufferApp(tk.Tk):
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
                     def done_pdf(pdf_result, err):
+                        nonlocal first_clip_id
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
@@ -732,8 +733,12 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+
+            # Use the instance attribute set by _attach_file_classic if first_clip_id is still None
+            final_first_id = first_clip_id or getattr(self, '_first_clip_id', None)
+            if final_first_id:
+                self.after(100, lambda: EditClipWindow(self, final_first_id))
+                self._first_clip_id = None # Reset for next session
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
