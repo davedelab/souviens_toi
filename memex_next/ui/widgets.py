@@ -1,9 +1,11 @@
-### memex_next/ui/widgets.py
+# memex_next/ui/widgets.py
 import tkinter as tk
 import tkinter.ttk as ttk
 
+
 class Tooltip:
     """Infobulle simple au survol."""
+
     def __init__(self, widget, text):
         self.widget = widget
         self.text = text
@@ -17,8 +19,14 @@ class Tooltip:
             return
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
-        self.tip.attributes('-topmost', True)
-        lbl = ttk.Label(self.tip, text=self.text, relief='solid', borderwidth=1, background='#ffffe0')
+        self.tip.attributes("-topmost", True)
+        lbl = ttk.Label(
+            self.tip,
+            text=self.text,
+            relief="solid",
+            borderwidth=1,
+            background="#ffffe0",
+        )
         lbl.pack(ipadx=4, ipady=2)
         self.move(e)
 

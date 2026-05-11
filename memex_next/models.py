@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class Clip:
     id: Optional[int] = None
@@ -14,6 +15,7 @@ class Clip:
     categories: str = ""
     read_later: int = 0
 
+
 @dataclass
 class Task:
     id: Optional[int] = None
@@ -24,6 +26,7 @@ class Task:
     due_at: Optional[int] = None
     clip_id: Optional[int] = None
     created_at: int = 0
+
 
 @dataclass
 class File:
