@@ -5,8 +5,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import socket
-from typing import Dict, Optional, Tuple
-from pathlib import Path
+from typing import Dict
 
 try:
     from bs4 import BeautifulSoup

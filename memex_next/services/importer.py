@@ -1,6 +1,5 @@
 ### memex_next/services/import.py
-import json, pathlib, shutil, sqlite3
-from datetime import datetime, timezone as TZ
+import json, pathlib
 
 def migrate_from_db(db_path: pathlib.Path) -> int:
     """Import sans verrou : lecture seule + INSERT un par un."""

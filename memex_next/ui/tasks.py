@@ -1,7 +1,6 @@
 ### memex_next/ui/tasks.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.messagebox as mb, tkinter.simpledialog as sd
+import tkinter as tk, tkinter.ttk as ttk, tkinter.messagebox as mb
 import datetime as dt
-from typing import Optional
 from ..db import create_conn
 try:
     from tkcalendar import DateEntry as _DateEntry
