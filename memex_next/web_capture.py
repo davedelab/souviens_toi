@@ -5,7 +5,8 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import socket
-from typing import Dict
+from typing import Dict, Optional, Tuple
+from pathlib import Path
 
 try:
     from bs4 import BeautifulSoup
@@ -174,7 +175,7 @@ def ai_summarize_web_content(web_data: Dict[str, str], lang: str = "fr") -> str:
     url = web_data.get('url', '')
     
     if not content.strip():
-        return "❌ Aucun contenu textuel trouvé sur cette page"
+        return f"❌ Aucun contenu textuel trouvé sur cette page"
     
     # Limiter le contenu pour éviter les tokens excessifs
     content_preview = content[:4000] if len(content) > 4000 else content

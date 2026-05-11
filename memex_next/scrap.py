@@ -1,5 +1,6 @@
 ### memex_next/scrap.py
-import urllib.request
+import urllib.request, pathlib
+from .config import SEPARATOR
 try:
     from bs4 import BeautifulSoup, Comment
 except Exception:

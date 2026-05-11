@@ -1,11 +1,5 @@
 ### memex_next/ui/app.py
-import tkinter as tk
-import tkinter.ttk as ttk
-import threading
-import time
-import datetime as dt
-import sys
-import pathlib
+import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
@@ -407,6 +401,7 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
+            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
@@ -428,6 +423,7 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
+            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
@@ -606,7 +602,7 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_categories
+            from ..ai import ai_generate_tags, ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -654,8 +650,7 @@ class BufferApp(tk.Tk):
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib
-        import mimetypes
+        import hashlib, mimetypes
         added = 0
         self._first_clip_id_for_session = None
         
@@ -1023,8 +1018,7 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes
-            import ctypes.wintypes as wt
+            import ctypes, ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
