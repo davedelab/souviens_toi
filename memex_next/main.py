@@ -1,3 +1,4 @@
+import sys, tkinter as tk
 from .ui.app import BufferApp
 from .db import init_db
 

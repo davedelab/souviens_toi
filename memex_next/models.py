@@ -1,5 +1,6 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List, Optional
 
 @dataclass
 class Clip:

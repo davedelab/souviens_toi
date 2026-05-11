@@ -1,5 +1,6 @@
 ### memex_next/ocr.py
 from io import BytesIO
+from typing import Optional
 
 def extract_text_from_blob(blob: bytes, mime: str) -> str:
     """Renvoie le texte brut d’un blob image/pdf."""
