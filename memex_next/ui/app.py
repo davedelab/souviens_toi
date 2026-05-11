@@ -1,5 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
@@ -400,7 +406,6 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
@@ -422,7 +427,6 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
@@ -601,7 +605,7 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
+            from ..ai import ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -649,9 +653,10 @@ class BufferApp(tk.Tk):
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -695,8 +700,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -732,8 +737,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -1017,7 +1022,8 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
