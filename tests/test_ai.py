@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from memex_next.ai import ai_generate_tags
 
 def test_ai_generate_tags_success():

@@ -5,16 +5,16 @@ from ..models import Clip
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:
     title   = clip.get("title", "")
-    title_safe = title.replace('"', "'")
     date    = dt.datetime.fromtimestamp(clip.get("ts", 0), tz=dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
     tags    = [t.strip() for t in clip.get("tags", "").replace(";", ",").split(",") if t.strip()]
     cats    = [c.strip() for c in clip.get("categories", "").split(",") if c.strip()]
     typ     = clip.get("type", "note")
     source  = clip.get("source", "")
     body    = clip.get("raw_text", "")
+    title_esc = title.replace('"', "'")
     front   = [
         "---",
-        f'title: "{title_safe}"',
+        f'title: "{title_esc}"',
         f'date: "{date}"',
         f'tags: [{", ".join(tags)}]',
         f'categories: [{", ".join(cats)}]',
