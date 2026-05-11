@@ -1,11 +1,21 @@
 ### memex_next/ui/editor.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.scrolledtext as st
+import tkinter.filedialog as fd
+import tkinter.simpledialog as sd
+import tkinter.messagebox as mb
+import pathlib
+import hashlib
+import mimetypes
+import os
+import tempfile
+import webbrowser
 from typing import Optional, Dict, Any
+from io import BytesIO
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..services.export import clip_to_markdown
 from .widgets import Tooltip
 
 try:
