@@ -11,8 +11,8 @@ import queue
 from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -128,10 +128,12 @@ class SearchWindow(tk.Toplevel):
         prev_selected = set(self.tree.selection())
         conn = create_conn()
         if not query and not period:
-            rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
+            cur = conn.execute("SELECT * FROM clips ORDER BY ts DESC")
         else:
-            rows = self._search_sql(conn, query, period)
-        clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
+            cur = self._search_sql(conn, query, period)
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
+        clips = [dict(zip(cols, r)) for r in rows]
         if self.read_later_only.get():
             clips = [c for c in clips if c.get('read_later')]
         if self.active_tag_filters:
@@ -193,8 +195,7 @@ class SearchWindow(tk.Toplevel):
         sql = "SELECT * FROM clips"
         if where: sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY ts DESC LIMIT 500"
-        cur = conn.execute(sql, params)
-        return cur.fetchall()
+        return conn.execute(sql, params)
 
     def build_tag_filters(self):
         for w in self.tags_filter_frame.winfo_children(): w.destroy()
@@ -297,9 +298,11 @@ class SearchWindow(tk.Toplevel):
         if not sels: return
         ids = [int(i) for i in sels]
         conn = create_conn()
-        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
+        cur = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids)
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
         conn.close()
-        clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
+        clips = [dict(zip(cols, r)) for r in rows]
         folder = tk.filedialog.askdirectory()
         if not folder: return
         count = export_selected_md(clips, pathlib.Path(folder), load_config())
@@ -307,9 +310,11 @@ class SearchWindow(tk.Toplevel):
 
     def export_all_md(self):
         conn = create_conn()
-        rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
+        cur = conn.execute("SELECT * FROM clips ORDER BY ts DESC")
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
         conn.close()
-        clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
+        clips = [dict(zip(cols, r)) for r in rows]
         folder = tk.filedialog.askdirectory()
         if not folder: return
         count = export_selected_md(clips, pathlib.Path(folder), load_config())
@@ -320,9 +325,11 @@ class SearchWindow(tk.Toplevel):
         if not sels: return
         ids = [int(i) for i in sels]
         conn = create_conn()
-        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
+        cur = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids)
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
         conn.close()
-        clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
+        clips = [dict(zip(cols, r)) for r in rows]
         path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
@@ -330,9 +337,11 @@ class SearchWindow(tk.Toplevel):
 
     def export_all_json(self):
         conn = create_conn()
-        rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
+        cur = conn.execute("SELECT * FROM clips ORDER BY ts DESC")
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
         conn.close()
-        clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
+        clips = [dict(zip(cols, r)) for r in rows]
         path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
