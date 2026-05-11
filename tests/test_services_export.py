@@ -19,7 +19,6 @@ mock_modules = [
 for mod in mock_modules:
     sys.modules[mod] = MagicMock()
 
-import pytest
 from memex_next.services.export import safe_filename
 
 def test_safe_filename_normal():
