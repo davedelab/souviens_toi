@@ -1,12 +1,18 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
 from ..services.async_worker import runner
 from ..config import load_config, save_config, SEPARATOR
 from ..db import create_conn
-from ..ai import ai_generate_tags, ai_generate_title
+from ..ai import ai_generate_tags, ai_generate_title, ai_generate_categories
 from .search import SearchWindow
 from .editor import EditClipWindow
 from .tasks import TasksWindow
@@ -400,7 +406,6 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
@@ -422,7 +427,6 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
@@ -601,7 +605,6 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -641,48 +644,40 @@ class BufferApp(tk.Tk):
     def attach_file(self):
         from tkinter import filedialog
         paths = filedialog.askopenfilenames(
-            filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
-                       ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
+            filetypes=[["PDF", "*.pdf"], ["Images", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
+                       ["Documents", "*.txt;*.md;*.docx"], ["Tous", "*.*"]]
         )
-        if not paths: return
+        if not paths:
+            return
         
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
+        ai_lang = cfg.get('ai_lang', 'fr')
+        tags = self.tags_var.get().strip()
         
-        import hashlib, mimetypes
-        added = 0
-        first_clip_id = None
+        self.show_toast(f"⏳ Import de {len(paths)} fichier(s) en cours...")
+        self._set_ui_busy(True)
         
-        for p in paths:
-            try:
-                data = pathlib.Path(p).read_bytes()
-                sha = hashlib.sha256(data).hexdigest()
-                mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
-                title = pathlib.Path(p).name
-                is_pdf = p.lower().endswith('.pdf')
-                
-                # Analyse PDF intelligente si activée
-                if is_pdf and auto_analyze_pdf:
-                    # Afficher un message d'attente plus détaillé
-                    self.show_toast("📄 Numérisation PDF IA en cours... Veuillez patienter")
-                    # Désactiver temporairement les boutons pour éviter les clics multiples
-                    self.after(0, lambda: self._set_ui_busy(True))
+        def work():
+            import hashlib
+            import mimetypes
+            added_count = 0
+            first_id = None
+            for p in paths:
+                try:
+                    p_path = pathlib.Path(p)
+                    data = p_path.read_bytes()
+                    sha = hashlib.sha256(data).hexdigest()
+                    mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
+                    title = p_path.name
+                    is_pdf = p.lower().endswith('.pdf')
                     
-                    def work_pdf(pdf_path=p):
+                    clip_id = None
+                    if is_pdf and auto_analyze_pdf:
                         from ..pdf_analyzer import analyze_pdf_complete
-                        cfg = load_config()
-                        lang = cfg.get('ai_lang', 'fr')
-                        return analyze_pdf_complete(pdf_path, lang, context="new")
-                    
-                    def done_pdf(pdf_result, err):
-                        if err:
-                            self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
-                            # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
-                            return
+                        pdf_result = analyze_pdf_complete(p, ai_lang, context="new")
                         
                         if pdf_result and pdf_result.get('success'):
-                            # Créer le clip avec le résumé IA
                             formatted_content = pdf_result['formatted_content']
                             pdf_title = pdf_result.get('title', title)
                             
@@ -692,61 +687,60 @@ class BufferApp(tk.Tk):
                                 "VALUES (?,?,?,?,?,?,?)",
                                 (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", pdf_title, "note", 
                                  formatted_content, formatted_content[:150] + '...', 
-                                 self.tags_var.get().strip() or "pdf")
+                                 tags or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
-                            
-                            # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                                          (clip_id, title, mime, len(data), sha, data))
                             conn.commit()
                             conn.close()
-                            
-                            self.show_toast("✅ PDF analysé et importé avec résumé IA!")
-                            
-                            # Rafraîchir la fenêtre de recherche si elle existe
-                            if hasattr(self, '_search_win') and self._search_win:
-                                try:
-                                    self._search_win.refresh_results()
-                                except:
-                                    pass
-                        
-                        else:
-                            # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
-                        
-                        # Réactiver l'interface
-                        self.after(0, lambda: self._set_ui_busy(False))
                     
-                    from ..services.async_worker import runner
-                    runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
-                else:
-                    # Import classique pour non-PDF ou si analyse désactivée
-                    self._attach_file_classic(p, data, sha, mime, title)
-                
-                added += 1
-            except Exception as e:
-                from tkinter import messagebox
-                messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
-        if added:
-            self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+                    if clip_id is None:
+                        # Fallback or classic
+                        clip_id = self._attach_file_classic(p, data, sha, mime, title, tags=tags or "file", update_session=False)
 
-    def _attach_file_classic(self, file_path, data, sha, mime, title):
+                    if first_id is None:
+                        first_id = clip_id
+                    added_count += 1
+                except Exception as e:
+                    print(f"Error importing {p}: {e}")
+            return added_count, first_id
+
+        def done(res, err):
+            self._set_ui_busy(False)
+            if err:
+                from tkinter import messagebox
+                messagebox.showerror("Import", f"Erreur lors de l'import: {str(err)}")
+            else:
+                added_count, first_id = res
+                self.show_toast(f"✅ {added_count} fichier(s) ajouté(s)")
+                if first_id:
+                    EditClipWindow(self, first_id)
+
+                if hasattr(self, '_search_win') and self._search_win:
+                    try:
+                        self._search_win.refresh_results()
+                    except Exception:
+                        pass
+
+        from ..services.async_worker import runner
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
+
+    def _attach_file_classic(self, file_path, data, sha, mime, title, tags=None, update_session=True):
         """Import classique de fichier sans analyse IA"""
         conn = create_conn()
+        if tags is None:
+            tags = self.tags_var.get().strip() or "file"
         conn.execute(
             "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags) "
             "VALUES (?,?,?,?,?,?,?)",
             (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", title, "note", "", "", 
-             self.tags_var.get().strip() or "file")
+             tags)
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        if update_session:
+            if not hasattr(self, '_first_clip_id_for_session') or self._first_clip_id_for_session is None:
+                self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -773,6 +767,8 @@ class BufferApp(tk.Tk):
         
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+
+        return clip_id
 
     def _set_ui_busy(self, busy: bool):
         """Active/désactive l'interface pendant les opérations longues"""
@@ -1017,7 +1013,8 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
