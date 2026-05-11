@@ -5,8 +5,10 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import socket
+import re
+import gzip
+import zlib
 from typing import Dict, Optional, Tuple
-from pathlib import Path
 
 try:
     from bs4 import BeautifulSoup
@@ -24,6 +26,120 @@ from .config import load_config
 from .ai import _ai_call, MODEL, ENDPOINT
 
 
+def _prepare_url(url: str) -> Tuple[str, urllib.parse.ParseResult, Optional[str]]:
+    """Normalise et valide l'URL."""
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.scheme:
+        url = 'https://' + url
+        parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme not in ['http', 'https']:
+        return url, parsed, "URL invalide : doit commencer par http:// ou https://"
+
+    return url, parsed, None
+
+
+def _download_html(url: str, timeout: int, parsed: urllib.parse.ParseResult) -> Tuple[Optional[str], Optional[str]]:
+    """Télécharge le HTML brut, gère la décompression et le décodage."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        response = urllib.request.urlopen(req, timeout=timeout)
+        raw_data = response.read()
+
+        # Gérer la décompression
+        content_encoding = response.headers.get('Content-Encoding', '').lower()
+        if content_encoding == 'gzip':
+            raw_data = gzip.decompress(raw_data)
+        elif content_encoding == 'deflate':
+            raw_data = zlib.decompress(raw_data)
+
+        # Détecter l'encodage
+        charset = 'utf-8'
+        content_type = response.headers.get('Content-Type', '')
+        if 'charset=' in content_type:
+            charset = content_type.split('charset=')[1].split(';')[0].strip()
+
+        return raw_data.decode(charset, errors='ignore'), None
+
+    except urllib.error.URLError as e:
+        if hasattr(e, 'reason'):
+            if isinstance(e.reason, socket.gaierror):
+                return None, f"Erreur DNS : Impossible de résoudre '{parsed.netloc}'. Vérifiez votre connexion internet."
+            else:
+                return None, f"Erreur de connexion : {e.reason}"
+        else:
+            return None, f"Erreur URL : {e}"
+    except socket.timeout:
+        return None, f"Timeout : Le site ne répond pas dans les {timeout} secondes"
+    except Exception as e:
+        return None, f"Erreur inattendue : {str(e)}"
+
+
+def _extract_title(html: str, parsed: urllib.parse.ParseResult) -> str:
+    """Extrait le titre de la page."""
+    if BS4_AVAILABLE:
+        soup = BeautifulSoup(html, 'html.parser')
+        title_tag = soup.find('title')
+        return title_tag.get_text().strip() if title_tag else parsed.netloc
+    else:
+        title_match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
+        return title_match.group(1).strip() if title_match else parsed.netloc
+
+
+def _extract_content(html: str) -> str:
+    """Extrait le contenu textuel principal avec plusieurs stratégies de fallback."""
+    content = ""
+
+    # 1. Trafilatura
+    if TRAFILATURA_AVAILABLE:
+        try:
+            content = trafilatura.extract(html,
+                                        output_format='txt',
+                                        include_comments=False,
+                                        include_tables=True,
+                                        include_images=False,
+                                        include_links=False)
+            if content:
+                return content.strip()
+        except Exception:
+            pass
+
+    # 2. BeautifulSoup fallback
+    if BS4_AVAILABLE:
+        soup = BeautifulSoup(html, 'html.parser')
+        # Supprimer les éléments indésirables
+        for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'advertisement']):
+            element.decompose()
+
+        # Chercher le contenu principal
+        main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=lambda x: x and 'content' in x.lower())
+        if main_content:
+            content = main_content.get_text(separator='\n', strip=True)
+        else:
+            content = soup.get_text(separator='\n', strip=True)
+
+    if content:
+        return content
+
+    # 3. Basic regex fallback
+    # Supprimer les balises script et style
+    clean_html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    clean_html = re.sub(r'<style[^>]*>.*?</style>', '', clean_html, flags=re.DOTALL | re.IGNORECASE)
+    # Extraire le texte
+    text = re.sub(r'<[^>]+>', '', clean_html)
+    return ' '.join(text.split())[:2000]
+
+
 def extract_web_content(url: str, timeout: int = 20) -> Dict[str, str]:
     """
     Extrait le contenu d'une page web de manière robuste
@@ -38,117 +154,25 @@ def extract_web_content(url: str, timeout: int = 20) -> Dict[str, str]:
     }
     
     try:
-        # Validation de l'URL
-        parsed = urllib.parse.urlparse(url)
-        if not parsed.scheme:
-            url = 'https://' + url
-            parsed = urllib.parse.urlparse(url)
-        
-        if parsed.scheme not in ['http', 'https']:
-            result['error'] = "URL invalide : doit commencer par http:// ou https://"
+        # 1. Préparation de l'URL
+        normalized_url, parsed, error = _prepare_url(url)
+        if error:
+            result['error'] = error
             return result
         
-        # Headers pour éviter les blocages
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
-        }
-        
-        req = urllib.request.Request(url, headers=headers)
-        
-        # Tentative de connexion avec gestion d'erreurs détaillée
-        try:
-            response = urllib.request.urlopen(req, timeout=timeout)
-            raw_data = response.read()
-            
-            # Gérer la décompression si nécessaire
-            content_encoding = response.headers.get('Content-Encoding', '').lower()
-            if content_encoding == 'gzip':
-                import gzip
-                raw_data = gzip.decompress(raw_data)
-            elif content_encoding == 'deflate':
-                import zlib
-                raw_data = zlib.decompress(raw_data)
-            
-            # Détecter l'encodage depuis les headers ou le contenu
-            charset = 'utf-8'  # Par défaut
-            content_type = response.headers.get('Content-Type', '')
-            if 'charset=' in content_type:
-                charset = content_type.split('charset=')[1].split(';')[0].strip()
-            
-            html = raw_data.decode(charset, errors='ignore')
-            result['raw_html'] = html
-        except urllib.error.URLError as e:
-            if hasattr(e, 'reason'):
-                if isinstance(e.reason, socket.gaierror):
-                    result['error'] = f"Erreur DNS : Impossible de résoudre '{parsed.netloc}'. Vérifiez votre connexion internet."
-                else:
-                    result['error'] = f"Erreur de connexion : {e.reason}"
-            else:
-                result['error'] = f"Erreur URL : {e}"
-            return result
-        except socket.timeout:
-            result['error'] = f"Timeout : Le site ne répond pas dans les {timeout} secondes"
-            return result
-        except Exception as e:
-            result['error'] = f"Erreur inattendue : {str(e)}"
+        # 2. Téléchargement du HTML
+        html, error = _download_html(normalized_url, timeout, parsed)
+        if error:
+            result['error'] = error
             return result
         
-        # Extraction du titre
-        if BS4_AVAILABLE:
-            soup = BeautifulSoup(html, 'html.parser')
-            title_tag = soup.find('title')
-            result['title'] = title_tag.get_text().strip() if title_tag else parsed.netloc
-            
-            # Nettoyage du HTML pour trafilatura
-            for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
-                script.decompose()
-        else:
-            import re
-            title_match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
-            result['title'] = title_match.group(1).strip() if title_match else parsed.netloc
+        result['raw_html'] = html
         
-        # Extraction du contenu principal
-        if TRAFILATURA_AVAILABLE:
-            try:
-                content = trafilatura.extract(html, 
-                                            output_format='txt',
-                                            include_comments=False,
-                                            include_tables=True,
-                                            include_images=False,
-                                            include_links=False)
-                if content:
-                    result['content'] = content.strip()
-            except Exception:
-                pass
+        # 3. Extraction du titre
+        result['title'] = _extract_title(html, parsed)
         
-        # Fallback si trafilatura échoue
-        if not result['content'] and BS4_AVAILABLE:
-            soup = BeautifulSoup(html, 'html.parser')
-            # Supprimer les éléments indésirables
-            for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'advertisement']):
-                element.decompose()
-            
-            # Chercher le contenu principal
-            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=lambda x: x and 'content' in x.lower())
-            if main_content:
-                result['content'] = main_content.get_text(separator='\n', strip=True)
-            else:
-                result['content'] = soup.get_text(separator='\n', strip=True)
-        
-        # Si toujours pas de contenu, extraction basique
-        if not result['content']:
-            import re
-            # Supprimer les balises script et style
-            clean_html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            clean_html = re.sub(r'<style[^>]*>.*?</style>', '', clean_html, flags=re.DOTALL | re.IGNORECASE)
-            # Extraire le texte
-            text = re.sub(r'<[^>]+>', '', clean_html)
-            result['content'] = ' '.join(text.split())[:2000]  # Limiter à 2000 caractères
+        # 4. Extraction du contenu
+        result['content'] = _extract_content(html)
         
         result['success'] = True
         return result
@@ -175,7 +199,7 @@ def ai_summarize_web_content(web_data: Dict[str, str], lang: str = "fr") -> str:
     url = web_data.get('url', '')
     
     if not content.strip():
-        return f"❌ Aucun contenu textuel trouvé sur cette page"
+        return "❌ Aucun contenu textuel trouvé sur cette page"
     
     # Limiter le contenu pour éviter les tokens excessifs
     content_preview = content[:4000] if len(content) > 4000 else content
