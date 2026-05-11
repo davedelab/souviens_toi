@@ -152,11 +152,12 @@ def ai_suggest_new_categories(text: str, existing_list: list[str], lang: str = "
         parsed = json.loads(out)
         if "categories" in parsed and isinstance(parsed["categories"], list):
             # Filtrer les catégories qui existent déjà
+            existing_lower = {e.lower() for e in existing_list}
             suggestions = []
             for cat in parsed["categories"]:
                 if isinstance(cat, str) and cat.strip():
                     cat_clean = cat.strip()
-                    if cat_clean.lower() not in [existing.lower() for existing in existing_list]:
+                    if cat_clean.lower() not in existing_lower:
                         suggestions.append(cat_clean)
             return suggestions[:max_n]
     except Exception:
