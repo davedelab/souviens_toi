@@ -675,6 +675,7 @@ class BufferApp(tk.Tk):
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
                     def done_pdf(pdf_result, err):
+                        nonlocal first_clip_id
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
