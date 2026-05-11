@@ -1,10 +1,8 @@
 ### memex_next/services/import.py
 import json
 import pathlib
-import shutil
 import sqlite3
 import time
-from datetime import datetime, timezone as TZ
 from ..config import DB_FILE
 
 def migrate_from_db(db_path: pathlib.Path) -> int:

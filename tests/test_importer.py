@@ -1,5 +1,4 @@
 import json
-import pathlib
 import sqlite3
 import pytest
 from unittest.mock import patch
