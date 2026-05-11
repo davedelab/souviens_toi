@@ -1,5 +1,7 @@
 ### memex_next/services/export.py
-import json, pathlib, datetime as dt
+import json
+import pathlib
+import datetime as dt
 from typing import List, Dict, Any
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:

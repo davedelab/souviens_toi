@@ -1,5 +1,9 @@
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
+
+# Add project root to sys.path to resolve memex_next module
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Mock GUI and external dependencies before importing anything from memex_next
 mock_modules = [
@@ -11,8 +15,8 @@ mock_modules = [
 for module in mock_modules:
     sys.modules[module] = MagicMock()
 
-import pytest
-from memex_next.web_capture import format_web_capture_for_editor
+from memex_next.web_capture import format_web_capture_for_editor  # noqa: E402
+
 
 def test_format_web_capture_for_editor_success():
     web_data = {
@@ -29,6 +33,7 @@ def test_format_web_capture_for_editor_success():
     assert 'This is a summary.' in result
     assert 'Capturé le' in result
 
+
 def test_format_web_capture_for_editor_error():
     web_data = {
         'success': False,
@@ -44,6 +49,7 @@ def test_format_web_capture_for_editor_error():
     assert '**Erreur :** Connection timeout' in result
     assert 'Vérifiez votre connexion internet' in result
 
+
 def test_format_web_capture_for_editor_error_no_message():
     web_data = {
         'success': False,
@@ -55,6 +61,7 @@ def test_format_web_capture_for_editor_error_no_message():
 
     assert '# 🌐 Erreur de capture' in result
     assert '**Erreur :** Erreur inconnue' in result
+
 
 def test_format_web_capture_for_editor_no_title():
     web_data = {

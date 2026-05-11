@@ -145,9 +145,9 @@ class SearchWindow(tk.Toplevel):
             attachment_map = {clip_id: count for clip_id, count in attachment_counts}
         else:
             attachment_map = {}
-        
+
         conn.close()
-        
+
         for c in clips:
             attachment_count = attachment_map.get(c['id'], 0)
             attachment_display = str(attachment_count) if attachment_count > 0 else ""
@@ -495,7 +495,8 @@ class SearchWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         for p in paths:
             try:
