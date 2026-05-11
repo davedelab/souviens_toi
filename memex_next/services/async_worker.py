@@ -1,5 +1,6 @@
 ### memex_next/services/async_worker.py
-import queue, threading
+import queue
+import threading
 
 class TaskRunner:
     def __init__(self):

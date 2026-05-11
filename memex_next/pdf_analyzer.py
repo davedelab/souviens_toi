@@ -3,7 +3,7 @@ Module d'analyse intelligente de PDFs avec résumé IA
 """
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 try:
     import pdfplumber
