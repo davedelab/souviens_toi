@@ -1,9 +1,9 @@
 ### memex_next/ui/editor.py
 import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser, io
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, save_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
 from ..services.export import clip_to_markdown
 from .widgets import Tooltip
@@ -574,7 +574,7 @@ class EditClipWindow(tk.Toplevel):
         for fid, fn, mime, blob in rows:
             if mime and mime.startswith('image/') and Image is not None and ImageTk is not None:
                 try:
-                    img = Image.open(BytesIO(blob))
+                    img = Image.open(io.BytesIO(blob))
                     img.thumbnail((240, 180))
                     ph = ImageTk.PhotoImage(img)
                     lbl = tk.Label(self._thumb_container, image=ph, cursor='hand2')
@@ -661,7 +661,7 @@ class EditClipWindow(tk.Toplevel):
     def _open_image_preview(self, blob, title):
         if Image is None or ImageTk is None: return
         try:
-            img = Image.open(BytesIO(blob))
+            img = Image.open(io.BytesIO(blob))
             win = tk.Toplevel(self)
             win.title(title)
             win.geometry("900x700")
