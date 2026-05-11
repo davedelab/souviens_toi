@@ -1,6 +1,9 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
+import tkinter.filedialog as fd
+import tkinter.messagebox as mb
+import tkinter.simpledialog as sd
 import datetime as dt
 import json
 import pathlib
@@ -8,7 +11,7 @@ import queue
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..config import load_config, save_config
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow
 from ..services.async_worker import runner
 
@@ -408,7 +411,6 @@ class SearchWindow(tk.Toplevel):
                 conn.commit()
             conn.close()
             return len(updates)
-        from ..services.async_worker import runner
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
         self.master.show_toast("Tags IA en arrière-plan¦")
     def ai_cats_selected(self):
