@@ -11,8 +11,8 @@ import queue
 from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -135,9 +135,11 @@ class SearchWindow(tk.Toplevel):
         if self.read_later_only.get():
             clips = [c for c in clips if c.get('read_later')]
         if self.active_tag_filters:
-            clips = [c for c in clips if any(t.lower() in {tg.lower() for tg in self.active_tag_filters} for t in (c.get('tags') or '').replace(';',',').split(','))]
+            active_tags_lower = {tg.lower() for tg in self.active_tag_filters}
+            clips = [c for c in clips if any(t.lower() in active_tags_lower for t in (c.get('tags') or '').replace(';',',').split(','))]
         if self.active_category_filters:
-            clips = [c for c in clips if any(cat.lower() in {c2.lower() for c2 in self.active_category_filters} for cat in (c.get('categories') or '').split(','))]
+            active_cats_lower = {c2.lower() for c2 in self.active_category_filters}
+            clips = [c for c in clips if any(cat.lower() in active_cats_lower for cat in (c.get('categories') or '').split(','))]
         key_map = {'date': lambda r: r['ts'], 'title': lambda r: (r['title'] or '').lower(),
                    'categories': lambda r: (r.get('categories') or '').lower(), 'tags': lambda r: (r['tags'] or '').lower()}
         clips.sort(key=key_map.get(self._sort_col, key_map['date']), reverse=self._sort_desc)
