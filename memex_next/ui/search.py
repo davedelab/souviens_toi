@@ -11,8 +11,8 @@ import queue
 from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -51,31 +51,34 @@ class SearchWindow(tk.Toplevel):
     def build_ui(self):
         main_frame = ttk.Frame(self)
         main_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        self._build_left_panel(main_frame)
+        self._build_right_panel(main_frame)
 
-        # Gauche : recherche + résultats
-        left = ttk.Frame(main_frame)
-        left.pack(side='left', fill='both', expand=True, padx=(0,5))
+    def _build_left_panel(self, parent):
+        """Build the left panel containing search and results."""
+        left = ttk.Frame(parent)
+        left.pack(side='left', fill='both', expand=True, padx=(0, 5))
 
         search_frame = ttk.Frame(left)
-        search_frame.pack(fill='x', pady=(0,5))
+        search_frame.pack(fill='x', pady=(0, 5))
         ttk.Entry(search_frame, textvariable=self.query_var, font=("Segoe", 14)).pack(side='left', fill='x', expand=True)
         ttk.Button(search_frame, text="Rechercher", command=self.refresh).pack(side='left', padx=2)
 
         period_frame = ttk.Frame(left)
-        period_frame.pack(fill='x', pady=(0,5))
+        period_frame.pack(fill='x', pady=(0, 5))
         for label, days in [("Tout", ""), ("Hier", "1"), ("Semaine", "7"), ("Quinzaine", "15"), ("Mois", "30")]:
             ttk.Radiobutton(period_frame, text=label, variable=self.period_var, value=days, command=self.refresh).pack(side='left', padx=3)
-        ttk.Checkbutton(left, text="A lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0,5))
+        ttk.Checkbutton(left, text="A lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0, 5))
 
         # Filtres tags
         self.tags_filter_frame = ttk.Frame(left)
-        self.tags_filter_frame.pack(fill='x', pady=(0,5))
-        ttk.Button(left, text="Effacer filtres", command=self.clear_tag_filters).pack(anchor='w', pady=(0,5))
+        self.tags_filter_frame.pack(fill='x', pady=(0, 5))
+        ttk.Button(left, text="Effacer filtres", command=self.clear_tag_filters).pack(anchor='w', pady=(0, 5))
 
         # Filtres catégories
         self.cats_filter_frame = ttk.Frame(left)
-        self.cats_filter_frame.pack(fill='x', pady=(0,5))
-        ttk.Button(left, text="Effacer filtres catégories", command=self.clear_category_filters).pack(anchor='w', pady=(0,5))
+        self.cats_filter_frame.pack(fill='x', pady=(0, 5))
+        ttk.Button(left, text="Effacer filtres catégories", command=self.clear_category_filters).pack(anchor='w', pady=(0, 5))
 
         # Tree
         cols = ("date", "title", "categories", "tags", "attachments")
@@ -91,17 +94,18 @@ class SearchWindow(tk.Toplevel):
         self._build_context_menu()
         self.tree.bind("<Button-3>", self._on_tree_right_click)
 
-        # Droite : actions simplifiées
-        right = ttk.Frame(main_frame)
-        right.pack(side='right', fill='y', padx=(5,0))
+    def _build_right_panel(self, parent):
+        """Build the right panel containing action buttons and IA tools."""
+        right = ttk.Frame(parent)
+        right.pack(side='right', fill='y', padx=(5, 0))
         ttk.Label(right, text="Actions").pack(anchor='w')
         ttk.Button(right, text="Supprimer sélection", command=self.bulk_delete_selected).pack(fill='x', pady=2)
         ttk.Button(right, text="Supprimer clip", command=self.delete_clip).pack(fill='x', pady=2)
 
-        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(8,8))
+        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(8, 8))
 
         ia_frame = ttk.LabelFrame(right, text="Intelligence artificielle")
-        ia_frame.pack(fill='x', pady=(0,6))
+        ia_frame.pack(fill='x', pady=(0, 6))
         ttk.Button(ia_frame, text="Tags (sélection)", command=self.ai_tags_selected).pack(fill='x', pady=2)
         ttk.Button(ia_frame, text="Tags manquants (IA)", command=self.ai_tags_missing).pack(fill='x', pady=2)
         ttk.Button(ia_frame, text="Traitement IA (non traités)", command=self.ai_process_untagged).pack(fill='x', pady=2)
@@ -119,7 +123,7 @@ class SearchWindow(tk.Toplevel):
         export_menu.add_separator()
         export_menu.add_command(label="Importer JSON", command=self.import_json)
         export_btn["menu"] = export_menu
-        export_btn.pack(fill='x', pady=(4,0))
+        export_btn.pack(fill='x', pady=(4, 0))
 
     # ---------- actions ----------
     def refresh(self, *args):
@@ -500,7 +504,8 @@ class SearchWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         for p in paths:
             try:
