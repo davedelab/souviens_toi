@@ -1,0 +1,25 @@
+    def _make_ui_button(self, parent, text, command, tip=None, **kwargs):
+        """Standardized button creation with optional tooltip and styling."""
+        side = kwargs.pop('side', 'left')
+        padx = kwargs.pop('padx', 2)
+        pady = kwargs.pop('pady', 0)
+        use_ttk = kwargs.pop('use_ttk', False)
+
+        if not use_ttk:
+            params = {
+                'bg': "#374151", 'fg': "white",
+                'activebackground': "#111827", 'relief': 'raised',
+                'bd': 2, 'highlightthickness': 0
+            }
+            if 'w' in kwargs:
+                params['width'] = kwargs.pop('w')
+            params.update(kwargs)
+            b = tk.Button(parent, text=text, command=command, **params)
+        else:
+            b = ttk.Button(parent, text=text, command=command, **kwargs)
+
+        b.pack(side=side, padx=padx, pady=pady)
+
+        if tip and load_config().get('tooltips_enabled', True):
+            Tooltip(b, tip)
+        return b
