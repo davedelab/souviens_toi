@@ -1,5 +1,6 @@
 ### memex_next/services/clipboard.py
-import sys, subprocess, pathlib
+import sys
+import subprocess
 try:
     import win32clipboard
 except Exception:

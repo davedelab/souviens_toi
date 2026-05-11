@@ -1,11 +1,21 @@
 ### memex_next/ui/editor.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.scrolledtext as st
+import tkinter.filedialog as fd
+import tkinter.simpledialog as sd
+import tkinter.messagebox as mb
+import pathlib
+import hashlib
+import mimetypes
+import os
+import tempfile
+import webbrowser
+from io import BytesIO
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..services.export import clip_to_markdown
 from .widgets import Tooltip
 
 try:
@@ -315,8 +325,8 @@ class EditClipWindow(tk.Toplevel):
     def _md_hr(self):
         idx = self.editor.index('insert')
         self.editor.insert(idx, "\n---\n")
-    
-    def _md_preserve(self): 
+
+    def _md_preserve(self):
         self._md_wrap('%', '%', 'texte à préserver')
     def _md_link(self):
         start, end = self._sel_range()
@@ -421,14 +431,14 @@ class EditClipWindow(tk.Toplevel):
 
     def _ai_smart_summary(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: 
+        if not text:
             mb.showinfo("IA", "Aucun texte à résumer")
             return
-        
+
         # Vérifier s'il y a des sections marquées
         import re
         preserved_count = len(re.findall(r'%[^%]+%', text))
-        
+
         if preserved_count > 0:
             msg = f"Sections à préserver détectées: {preserved_count}\n\n"
             msg += "Les parties entre %...% seront conservées telles quelles.\n"
@@ -436,16 +446,16 @@ class EditClipWindow(tk.Toplevel):
             msg += "Continuer?"
             if not mb.askyesno("Résumé IA", msg):
                 return
-        
+
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
-        
+
         def work():
             from ..ai import ai_smart_summary
             return ai_smart_summary(text, lang=lang)
-        
+
         def done(res, err):
-            if err: 
+            if err:
                 mb.showerror("IA", str(err))
                 return
             if res:
@@ -453,7 +463,7 @@ class EditClipWindow(tk.Toplevel):
                 self.editor.delete('1.0', 'end')
                 self.editor.insert('1.0', res)
                 self._toast("Résumé IA appliqué")
-        
+
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
@@ -464,10 +474,10 @@ class EditClipWindow(tk.Toplevel):
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
-        
+
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
-        
+
         added = 0
         for p in paths:
             try:
@@ -476,41 +486,41 @@ class EditClipWindow(tk.Toplevel):
                 mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
                 title = pathlib.Path(p).name
                 is_pdf = p.lower().endswith('.pdf')
-                
+
                 # Joindre le fichier d'abord
                 conn = create_conn()
                 conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                              (self.clip_id, title, mime, len(data), sha, data))
                 conn.commit()
                 conn.close()
-                
+
                 # Analyse PDF intelligente si activée
                 if is_pdf and auto_analyze_pdf:
                     self._toast("📄 Analyse du PDF en cours...")
-                    
+
                     def work_pdf(pdf_path=p):
                         from ..pdf_analyzer import analyze_pdf_complete
                         cfg = load_config()
                         lang = cfg.get('ai_lang', 'fr')
                         return analyze_pdf_complete(pdf_path, lang, context="existing")
-                    
+
                     def done_pdf(pdf_result, err):
                         if err:
                             self._toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers extraction classique
                             self._attach_file_classic_editor(mime, data)
                             return
-                        
+
                         if pdf_result and pdf_result.get('success'):
                             # Insérer le résumé dans l'éditeur
                             formatted_content = pdf_result['formatted_content']
                             current_content = self.editor.get('1.0', 'end').strip()
-                            
+
                             if current_content:
                                 self.editor.insert('end', formatted_content)
                             else:
                                 self.editor.insert('1.0', formatted_content.lstrip())
-                            
+
                             # Mettre à jour la base avec le nouveau contenu
                             new_content = self.editor.get('1.0', 'end').strip()
                             conn = create_conn()
@@ -518,21 +528,21 @@ class EditClipWindow(tk.Toplevel):
                                          (new_content, new_content[:150] + '...', self.clip_id))
                             conn.commit()
                             conn.close()
-                            
+
                             self._toast("✅ PDF joint avec résumé IA ajouté!")
                         else:
                             # Fallback vers extraction classique
                             self._attach_file_classic_editor(mime, data)
-                        
+
                         self._load_attachments_list()
                         self._reload_thumbnails()
-                    
+
                     from ..services.async_worker import runner
                     runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
                 else:
                     # Extraction classique pour non-PDF ou si analyse désactivée
                     self._attach_file_classic_editor(mime, data)
-                
+
                 added += 1
             except Exception as e:
                 mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
@@ -554,12 +564,12 @@ class EditClipWindow(tk.Toplevel):
                 conn.close()
                 return True
             return False
-        
+
         def done(res, err):
             self._toast("Fichier joint" + (" et indexé" if res else ''))
             self._load_attachments_list()
             self._reload_thumbnails()
-        
+
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 

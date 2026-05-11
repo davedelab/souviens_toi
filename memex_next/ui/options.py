@@ -1,8 +1,12 @@
-import tkinter as tk, tkinter.ttk as ttk, tkinter.filedialog as fd, tkinter.messagebox as mb, tkinter.simpledialog as sd
-import json, pathlib, datetime as dt
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.filedialog as fd
+import tkinter.messagebox as mb
+import tkinter.simpledialog as sd
+import pathlib
 from ..db import create_conn
 from ..services.importer import migrate_from_db
-from ..config import load_config, save_config, DB_FILE, CONFIG_FILE
+from ..config import load_config, save_config
 
 class OptionsWindow(tk.Toplevel):
     def __init__(self, master):
@@ -98,7 +102,6 @@ class OptionsWindow(tk.Toplevel):
         
         def clean_corrupted_html():
             import tkinter.messagebox as tk_mb
-            from ..db import create_conn
             conn = create_conn()
             # Supprimer les fichiers HTML corrompus (taille suspecte ou contenu binaire)
             corrupted = conn.execute("""
