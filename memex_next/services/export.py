@@ -1,7 +1,8 @@
 ### memex_next/services/export.py
-import json, os, pathlib, datetime as dt
+import json
+import pathlib
+import datetime as dt
 from typing import List, Dict, Any
-from ..models import Clip
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:
     title   = clip.get("title", "")
@@ -11,9 +12,10 @@ def clip_to_markdown(clip: Dict[str, Any]) -> str:
     typ     = clip.get("type", "note")
     source  = clip.get("source", "")
     body    = clip.get("raw_text", "")
+    title_esc = title.replace('"', "'")
     front   = [
         "---",
-        f'title: "{title.replace('"', "'")}"',
+        f'title: "{title_esc}"',
         f'date: "{date}"',
         f'tags: [{", ".join(tags)}]',
         f'categories: [{", ".join(cats)}]',
