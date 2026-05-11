@@ -17,13 +17,13 @@ def migrate_from_db(db_path: pathlib.Path) -> int:
     dst = sqlite3.connect("souviens_toi.db", timeout=10)
     dst.execute("PRAGMA journal_mode=WAL")
 
-    # 4. Copie ligne par ligne (pas d’ATTACH)
-    for row in src.execute("SELECT ts, source, title, type, raw_text, summary, tags, categories, read_later FROM clips"):
-        dst.execute(
-            "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories, read_later) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            row
-        )
+    # 4. Copie en lot (itérateur pour l'efficacité mémoire)
+    rows_iter = src.execute("SELECT ts, source, title, type, raw_text, summary, tags, categories, read_later FROM clips")
+    dst.executemany(
+        "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories, read_later) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        rows_iter
+    )
     dst.commit()
 
     # 5. Ferme
@@ -38,12 +38,18 @@ def import_json(path: pathlib.Path):
         raise ValueError("JSON doit être une liste")
     import sqlite3, time
     db = sqlite3.connect("souviens_toi.db")
-    for c in clips:
-        db.execute(
-            "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories, read_later) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            (c.get("ts", int(time.time())), c.get("source", ""), c.get("title", ""), c.get("type", "note"),
-             c.get("raw_text", ""), c.get("summary", ""), c.get("tags", ""), c.get("categories", ""), c.get("read_later", 0))
-        )
+
+    # Générateur pour l'efficacité mémoire
+    data_gen = (
+        (c.get("ts", int(time.time())), c.get("source", ""), c.get("title", ""), c.get("type", "note"),
+         c.get("raw_text", ""), c.get("summary", ""), c.get("tags", ""), c.get("categories", ""), c.get("read_later", 0))
+        for c in clips
+    )
+
+    db.executemany(
+        "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories, read_later) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        data_gen
+    )
     db.commit()
     db.close()

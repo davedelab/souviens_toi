@@ -651,7 +651,7 @@ class BufferApp(tk.Tk):
         
         import hashlib, mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -695,8 +695,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -732,8 +732,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(500, lambda: self.open_clip_editor(self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -745,8 +745,8 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        if self._first_clip_id_for_session is None:
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
