@@ -11,9 +11,10 @@ import mimetypes
 import os
 import tempfile
 import webbrowser
+from io import BytesIO
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config
+from ..config import load_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
 from .widgets import Tooltip
 
