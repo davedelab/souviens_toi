@@ -480,84 +480,88 @@ class BufferApp(tk.Tk):
             # Nouvelle capture intelligente avec IA
             self.show_toast("🌐 Capture et analyse IA en cours... Veuillez patienter")
             self.after(0, lambda: self._set_ui_busy(True))
-            
-            def work_smart(u=url):
-                from ..web_capture import capture_web_link_complete
-                cfg = load_config()
-                lang = cfg.get('ai_lang', 'fr')
-                return capture_web_link_complete(u, lang)
-            
-            def done_smart(web_result, err):
-                if err:
-                    self.show_toast(f"❌ Erreur de capture web: {str(err)}")
-                    # Fallback vers capture classique
-                    self._capture_article_classic(url)
-                    return
-                
-                if web_result and web_result.get('success'):
-                    # Créer le clip avec le résumé IA
-                    formatted_content = web_result['formatted_content']
-                    web_title = web_result.get('title', 'Page web')
-                    
-                    conn = create_conn()
-                    conn.execute(
-                        "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories) "
-                        "VALUES (?,?,?,?,?,?,?,?)",
-                        (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web", 
-                         formatted_content, formatted_content[:150] + '...', 
-                         self.tags_var.get().strip() or "web", "")
-                    )
-                    clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                    
-                    # Enregistrer l'URL source
-                    conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
-                                 (url, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
-                    
-                    # Sauvegarder le HTML brut si l'option est activée
-                    save_html = cfg.get('save_html_source', False)
-                    if save_html:
-                        raw_html = web_result.get('web_data', {}).get('raw_html', '')
-                        if raw_html:
-                            import hashlib
-                            data = raw_html.encode('utf-8', errors='ignore')
-                            sha = hashlib.sha256(data).hexdigest()
-                            fn = (web_title or 'page') + '.html'
-                            conn.execute("INSERT INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
-                                         (clip_id, fn, 'text/html', len(data), sha, data))
-                    
-                    conn.commit()
-                    conn.close()
-                    
-                    self.show_toast("✅ Page web capturée et analysée avec IA!")
-                    
-                    # Génération automatique des tags et catégories en arrière-plan
-                    auto_tags = cfg.get('auto_generate_tags_web', True)
-                    if auto_tags:
-                        self._generate_web_tags_async(clip_id, formatted_content)
-                    
-                    # Rafraîchir la fenêtre de recherche si elle existe
-                    if hasattr(self, '_search_win') and self._search_win:
-                        try:
-                            self._search_win.refresh_results()
-                        except:
-                            pass
-                    
-                    # Ouvrir l'éditeur
-                    self.after(100, lambda: EditClipWindow(self, clip_id))
-                else:
-                    # Fallback vers capture classique
-                    error_msg = web_result.get('error', 'Erreur inconnue')
-                    self.show_toast(f"⚠️ Capture IA échouée: {error_msg}")
-                    self._capture_article_classic(url)
-                
-                # Réactiver l'interface
-                self.after(0, lambda: self._set_ui_busy(False))
-            
+
             from ..services.async_worker import runner
-            runner.submit(work_smart, cb=lambda r,e: self.after(0, done_smart, r, e))
+            runner.submit(lambda: self._capture_article_smart_work(url),
+                          cb=lambda r, e: self.after(0, self._on_capture_article_smart_done, url, r, e))
         else:
             # Capture classique si IA désactivée
             self._capture_article_classic(url)
+
+    def _capture_article_smart_work(self, url):
+        """Action de capture intelligente en arrière-plan"""
+        from ..web_capture import capture_web_link_complete
+        cfg = load_config()
+        lang = cfg.get('ai_lang', 'fr')
+        return capture_web_link_complete(url, lang)
+
+    def _on_capture_article_smart_done(self, url, web_result, err):
+        """Callback après capture intelligente"""
+        if err:
+            self.show_toast(f"❌ Erreur de capture web: {str(err)}")
+            # Fallback vers capture classique
+            self._capture_article_classic(url)
+            return
+
+        if web_result and web_result.get('success'):
+            # Créer le clip avec le résumé IA
+            formatted_content = web_result['formatted_content']
+            web_title = web_result.get('title', 'Page web')
+
+            cfg = load_config()
+            conn = create_conn()
+            conn.execute(
+                "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web",
+                 formatted_content, formatted_content[:150] + '...',
+                 self.tags_var.get().strip() or "web", "")
+            )
+            clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+            # Enregistrer l'URL source
+            conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
+                         (url, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
+
+            # Sauvegarder le HTML brut si l'option est activée
+            save_html = cfg.get('save_html_source', False)
+            if save_html:
+                raw_html = web_result.get('web_data', {}).get('raw_html', '')
+                if raw_html:
+                    import hashlib
+                    data = raw_html.encode('utf-8', errors='ignore')
+                    sha = hashlib.sha256(data).hexdigest()
+                    fn = (web_title or 'page') + '.html'
+                    conn.execute("INSERT INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
+                                 (clip_id, fn, 'text/html', len(data), sha, data))
+
+            conn.commit()
+            conn.close()
+
+            self.show_toast("✅ Page web capturée et analysée avec IA!")
+
+            # Génération automatique des tags et catégories en arrière-plan
+            auto_tags = cfg.get('auto_generate_tags_web', True)
+            if auto_tags:
+                self._generate_web_tags_async(clip_id, formatted_content)
+
+            # Rafraîchir la fenêtre de recherche si elle existe
+            if hasattr(self, '_search_win') and self._search_win:
+                try:
+                    self._search_win.refresh_results()
+                except Exception:
+                    pass
+
+            # Ouvrir l'éditeur
+            self.after(100, lambda: EditClipWindow(self, clip_id))
+        else:
+            # Fallback vers capture classique
+            error_msg = web_result.get('error', 'Erreur inconnue') if web_result else 'Erreur inconnue'
+            self.show_toast(f"⚠️ Capture IA échouée: {error_msg}")
+            self._capture_article_classic(url)
+
+        # Réactiver l'interface
+        self.after(0, lambda: self._set_ui_busy(False))
 
     def _capture_article_classic(self, url):
         """Capture classique d'article web (fallback)"""
@@ -675,6 +679,7 @@ class BufferApp(tk.Tk):
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
                     def done_pdf(pdf_result, err):
+                        nonlocal first_clip_id
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
@@ -695,7 +700,7 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
+                            if first_clip_id is None:
                                 first_clip_id = clip_id
                             
                             # Joindre le fichier PDF
