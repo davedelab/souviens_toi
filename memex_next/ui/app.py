@@ -1,5 +1,12 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import queue
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
@@ -649,7 +656,8 @@ class BufferApp(tk.Tk):
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         first_clip_id = None
         
@@ -675,6 +683,7 @@ class BufferApp(tk.Tk):
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
                     def done_pdf(pdf_result, err):
+                        nonlocal first_clip_id
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
@@ -1017,7 +1026,8 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002

@@ -1,19 +1,16 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
-import tkinter.filedialog as fd
-import tkinter.messagebox as mb
-import tkinter.simpledialog as sd
+import tkinter.messagebox
+import tkinter.filedialog
 import datetime as dt
-import json
 import pathlib
 import queue
-from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
-from .editor import EditClipWindow, OPEN_EDITORS
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
+from .editor import EditClipWindow
 from ..services.async_worker import runner
 
 CLIPS_BASE_QUERY = (
@@ -500,7 +497,8 @@ class SearchWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
         if not paths: return
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         for p in paths:
             try:
@@ -534,8 +532,7 @@ class SearchWindow(tk.Toplevel):
                 runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
                 added += 1
             except Exception as e:
-                import tkinter.messagebox as mb
-                mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
+                tk.messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.master.show_toast(f"{added} fichier(s) joint(s)")
 
@@ -559,14 +556,23 @@ class SearchWindow(tk.Toplevel):
             while True:
                 kind, res, err = self._uiq.get_nowait()
                 if kind == 'ai_tags_done':
-                    if err: import tkinter.messagebox as mb; mb.showerror("AI", str(err))
-                    else: self.master.show_toast(f"Tags IA terminés ({res} éléments)"); self.refresh()
+                    if err:
+                        tk.messagebox.showerror("AI", str(err))
+                    else:
+                        self.master.show_toast(f"Tags IA terminés ({res} éléments)")
+                        self.refresh()
                 elif kind == 'ai_cats_done':
-                    if err: import tkinter.messagebox as mb; mb.showerror("AI", str(err))
-                    else: self.master.show_toast(f"Catégories IA terminées ({res} éléments)"); self.refresh()
+                    if err:
+                        tk.messagebox.showerror("AI", str(err))
+                    else:
+                        self.master.show_toast(f"Catégories IA terminées ({res} éléments)")
+                        self.refresh()
                 elif kind == 'ai_all_done':
-                    if err: import tkinter.messagebox as mb; mb.showerror("AI", str(err))
-                    else: self.master.show_toast(f"IA complète terminée ({res} éléments)"); self.refresh()
+                    if err:
+                        tk.messagebox.showerror("AI", str(err))
+                    else:
+                        self.master.show_toast(f"IA complète terminée ({res} éléments)")
+                        self.refresh()
         except queue.Empty: pass
         self.after(400, self._poll_ui)
 
