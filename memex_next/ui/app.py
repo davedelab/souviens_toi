@@ -1,12 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk, tkinter.ttk as ttk, threading, time, datetime as dt, sys, pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
 from ..services.async_worker import runner
 from ..config import load_config, save_config, SEPARATOR
 from ..db import create_conn
-from ..ai import ai_generate_tags, ai_generate_title
 from .search import SearchWindow
 from .editor import EditClipWindow
 from .tasks import TasksWindow
@@ -86,6 +85,7 @@ class BufferApp(tk.Tk):
         self.floating_icons_y = 200
         self._float_win = None
         self._search_win = None
+        self._first_clip_id_for_session = None
         self._setup_config()
         self.build_ui()
         self.start_clip_watcher()
@@ -651,7 +651,6 @@ class BufferApp(tk.Tk):
         
         import hashlib, mimetypes
         added = 0
-        first_clip_id = None
         
         for p in paths:
             try:
@@ -695,8 +694,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -732,8 +731,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -745,8 +744,8 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        if self._first_clip_id_for_session is None:
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
