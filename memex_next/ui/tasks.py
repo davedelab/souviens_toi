@@ -1,7 +1,8 @@
 ### memex_next/ui/tasks.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.messagebox as mb, tkinter.simpledialog as sd
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.messagebox as mb
 import datetime as dt
-from typing import Optional
 from ..db import create_conn
 try:
     from tkcalendar import DateEntry as _DateEntry
@@ -29,8 +30,10 @@ class TasksWindow(tk.Toplevel):
         self.due_date.pack(side='left')
         self.due_hour = tk.Spinbox(due_wrap, from_=0, to=23, width=3, format="%02.0f")
         self.due_min = tk.Spinbox(due_wrap, from_=0, to=59, width=3, format="%02.0f")
-        self.due_hour.delete(0, 'end'); self.due_hour.insert(0, dt.datetime.now().strftime('%H'))
-        self.due_min.delete(0, 'end'); self.due_min.insert(0, dt.datetime.now().strftime('%M'))
+        self.due_hour.delete(0, 'end')
+        self.due_hour.insert(0, dt.datetime.now().strftime('%H'))
+        self.due_min.delete(0, 'end')
+        self.due_min.insert(0, dt.datetime.now().strftime('%M'))
         self.due_hour.pack(side='left', padx=(4,0))
         self.due_min.pack(side='left', padx=(2,0))
         
@@ -63,20 +66,25 @@ class TasksWindow(tk.Toplevel):
             self.tree.heading(c, text=lbl)
             self.tree.column(c, width=w, anchor='w')
         self.tree.pack(fill='both', expand=True, padx=8, pady=6)
-        try: self.tree.bind("<Double-1>", self._edit_due_inline)
-        except Exception: pass
+        try:
+            self.tree.bind("<Double-1>", self._edit_due_inline)
+        except Exception:
+            pass
         self._refresh()
 
     def _refresh(self):
-        for it in self.tree.get_children(): self.tree.delete(it)
+        for it in self.tree.get_children():
+            self.tree.delete(it)
         conn = create_conn()
         rows = conn.execute("SELECT id, title, status, priority, due_at, reminder_days FROM tasks ORDER BY COALESCE(due_at, 1e18) ASC, id DESC").fetchall()
         conn.close()
         for rid, title, status, prio, due, reminder_days in rows:
             due_s = ''
             if due:
-                try: due_s = dt.datetime.fromtimestamp(due, tz=dt.timezone.utc).strftime('%Y-%m-%d %H:%M')
-                except Exception: pass
+                try:
+                    due_s = dt.datetime.fromtimestamp(due, tz=dt.timezone.utc).strftime('%Y-%m-%d %H:%M')
+                except Exception:
+                    pass
             
             reminder_s = ''
             if reminder_days is not None:
@@ -94,7 +102,8 @@ class TasksWindow(tk.Toplevel):
 
     def _add(self):
         title = self.new_title.get().strip()
-        if not title: return
+        if not title:
+            return
         due_ts = None
         try:
             if isinstance(self.due_date, ttk.Entry):
@@ -106,7 +115,8 @@ class TasksWindow(tk.Toplevel):
             if date_str:
                 due_dt = dt.datetime.strptime(f"{date_str} {hh:02d}:{mm:02d}", '%Y-%m-%d %H:%M').replace(tzinfo=dt.timezone.utc)
                 due_ts = int(due_dt.timestamp())
-        except Exception: due_ts = None
+        except Exception:
+            due_ts = None
         
         # Récupérer le rappel personnalisé
         try:
@@ -130,7 +140,8 @@ class TasksWindow(tk.Toplevel):
 
     def _done(self):
         sel = self.tree.selection()
-        if not sel: return
+        if not sel:
+            return
         tid = int(sel[0])
         conn = create_conn()
         conn.execute("UPDATE tasks SET status='done' WHERE id=?", (tid,))
@@ -140,7 +151,8 @@ class TasksWindow(tk.Toplevel):
 
     def _delete(self):
         sel = self.tree.selection()
-        if not sel: return
+        if not sel:
+            return
         tid = int(sel[0])
         conn = create_conn()
         conn.execute("DELETE FROM tasks WHERE id=?", (tid,))
@@ -150,7 +162,8 @@ class TasksWindow(tk.Toplevel):
 
     def _set_due_selected(self):
         sel = self.tree.selection()
-        if not sel: return
+        if not sel:
+            return
         tid = int(sel[0])
         due_ts = None
         try:
@@ -175,15 +188,17 @@ class TasksWindow(tk.Toplevel):
     def _set_reminder_selected(self):
         """Modifier le rappel de la tâche sélectionnée"""
         sel = self.tree.selection()
-        if not sel: return
+        if not sel:
+            return
         tid = int(sel[0])
-        
+
         # Récupérer le rappel actuel
         conn = create_conn()
         row = conn.execute("SELECT title, reminder_days FROM tasks WHERE id=?", (tid,)).fetchone()
         conn.close()
-        
-        if not row: return
+
+        if not row:
+            return
         title, current_reminder = row
         
         # Dialogue pour modifier le rappel
@@ -245,10 +260,12 @@ class TasksWindow(tk.Toplevel):
 
     def _edit_due_inline(self, event):
         region = self.tree.identify("region", event.x, event.y)
-        if region != "cell": return
+        if region != "cell":
+            return
         col = self.tree.identify_column(event.x)
         row = self.tree.identify_row(event.y)
-        if col != "#5" or not row: return
+        if col != "#5" or not row:
+            return
         tid = int(row)
         vals = self.tree.item(row, 'values')
         cur_due_str = vals[4] if len(vals) >= 5 else ''
@@ -274,7 +291,8 @@ class TasksWindow(tk.Toplevel):
                 date_w.insert(0, due_dt.strftime('%Y-%m-%d'))
             hour_w.insert(0, due_dt.strftime('%H'))
             min_w.insert(0, due_dt.strftime('%M'))
-        except Exception: pass
+        except Exception:
+            pass
         date_w.pack(side='left')
         hour_w.pack(side='left', padx=(6,0))
         min_w.pack(side='left', padx=(2,0))
