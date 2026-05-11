@@ -1,11 +1,21 @@
 ### memex_next/ui/editor.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.scrolledtext as st
+import tkinter.filedialog as fd
+import tkinter.simpledialog as sd
+import tkinter.messagebox as mb
+import pathlib
+import hashlib
+import mimetypes
+import os
+import tempfile
+import webbrowser
+import io
 from typing import Optional, Dict, Any
 from ..db import create_conn
-from ..config import load_config, save_config
+from ..config import load_config, SEPARATOR
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..services.export import clip_to_markdown
 from .widgets import Tooltip
 
 try:
@@ -42,7 +52,8 @@ class EditClipWindow(tk.Toplevel):
         self._thumb_photos = []
         self._create_widgets()
         self._bind_shortcuts()
-        if prefill: self._apply_prefill(prefill)
+        if prefill:
+            self._apply_prefill(prefill)
         OPEN_EDITORS[self.clip_id] = self
         self._load()
         self._reload_thumbnails()
@@ -182,14 +193,17 @@ class EditClipWindow(tk.Toplevel):
 
     def _select_default_tab(self):
         if not self._has_images and self._has_pdfs:
-            try: self._nb_right.select(self._tab_attach)
-            except Exception: pass
+            try:
+                self._nb_right.select(self._tab_attach)
+            except Exception:
+                pass
 
     def _load(self):
         conn = create_conn()
         row = conn.execute("SELECT title, raw_text, tags, categories, read_later FROM clips WHERE id=?", (self.clip_id,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         title, raw, tags, cats, read_later = row
         self.title_var.set(title or '')
         self.tags_var.set(tags or '')
@@ -214,28 +228,35 @@ class EditClipWindow(tk.Toplevel):
         )
         conn.commit()
         conn.close()
-        if hasattr(self.parent, 'refresh'): self.parent.refresh()
+        if hasattr(self.parent, 'refresh'):
+            self.parent.refresh()
         self._toast("Clip enregistré")
 
     def _delete(self):
-        if not mb.askyesno("Supprimer", "Supprimer ce clip ?"): return
+        if not mb.askyesno("Supprimer", "Supprimer ce clip ?"):
+            return
         conn = create_conn()
         conn.execute("DELETE FROM clips WHERE id=?", (self.clip_id,))
         conn.commit()
         conn.close()
-        if hasattr(self.parent, 'refresh'): self.parent.refresh()
+        if hasattr(self.parent, 'refresh'):
+            self.parent.refresh()
         self._toast("Supprimé")
         self._close()
 
     def _close(self):
-        try: self.grab_release()
-        except Exception: pass
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         OPEN_EDITORS.pop(self.clip_id, None)
         self.destroy()
 
     def _toast(self, text):
-        try: self.parent.show_toast(text)
-        except Exception: pass
+        try:
+            self.parent.show_toast(text)
+        except Exception:
+            pass
 
     # ---------- Aperçu ----------
     def _preview_md(self):
@@ -269,8 +290,10 @@ class EditClipWindow(tk.Toplevel):
 
     # ---------- markdown ----------
     def _sel_range(self):
-        try: return self.editor.index('sel.first'), self.editor.index('sel.last')
-        except tk.TclError: return None, None
+        try:
+            return self.editor.index('sel.first'), self.editor.index('sel.last')
+        except tk.TclError:
+            return None, None
 
     def _md_wrap(self, left, right, placeholder=''):
         start, end = self._sel_range()
@@ -321,9 +344,11 @@ class EditClipWindow(tk.Toplevel):
     def _md_link(self):
         start, end = self._sel_range()
         txt = ''
-        if start and end: txt = self.editor.get(start, end)
+        if start and end:
+            txt = self.editor.get(start, end)
         url = sd.askstring("Lien", "URL:")
-        if not url: return
+        if not url:
+            return
         label = txt or sd.askstring("Lien", "Texte du lien:", initialvalue=url) or url
         if start and end:
             self.editor.delete(start, end)
@@ -333,23 +358,32 @@ class EditClipWindow(tk.Toplevel):
             self.editor.insert(idx, f"[{label}]({url})")
 
     def _undo_editor(self):
-        try: self.editor.edit_undo()
-        except tk.TclError: pass
+        try:
+            self.editor.edit_undo()
+        except tk.TclError:
+            pass
+
     def _redo_editor(self):
-        try: self.editor.edit_redo()
-        except tk.TclError: pass
+        try:
+            self.editor.edit_redo()
+        except tk.TclError:
+            pass
 
     # ---------- IA ----------
     def _ai_tags(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: mb.showinfo("IA", "Aucun texte à analyser"); return
+        if not text:
+            mb.showinfo("IA", "Aucun texte à analyser")
+            return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
         def work():
             return ai_generate_tags(text, lang=lang, count=count)
         def done(res, err):
-            if err: mb.showerror("IA", str(err)); return
+            if err:
+                mb.showerror("IA", str(err))
+                return
             current_tags = self.tags_var.get() or ''
             # Effacer "Non traitée par l'IA" s'il est présent
             if "Non traitée par l'IA" in current_tags or "non traitée par l'IA" in current_tags:
@@ -364,12 +398,19 @@ class EditClipWindow(tk.Toplevel):
 
     def _ai_categories(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: mb.showinfo("IA", "Aucun texte à analyser"); return
-        if not self._user_cats: mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)"); return
+        if not text:
+            mb.showinfo("IA", "Aucun texte à analyser")
+            return
+        if not self._user_cats:
+            mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
+            return
+
         def work():
             return ai_generate_categories(text, user_cats=self._user_cats, lang=self.cfg.get('ai_lang','fr'), max_n=2)
         def done(res, err):
-            if err: mb.showerror("IA", str(err)); return
+            if err:
+                mb.showerror("IA", str(err))
+                return
             res = res or []
             self.cat1_var.set(res[0] if len(res) > 0 else '')
             self.cat2_var.set(res[1] if len(res) > 1 else '')
@@ -379,21 +420,29 @@ class EditClipWindow(tk.Toplevel):
 
     def _ai_title(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: mb.showinfo("IA", "Aucun texte à analyser"); return
+        if not text:
+            mb.showinfo("IA", "Aucun texte à analyser")
+            return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         max_len = int(cfg.get('ai_title_max_len', 80))
         def work():
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
-            if err: mb.showerror("IA", str(err)); return
-            if res: self.title_var.set(res); self._toast("Titre IA appliqué")
+            if err:
+                mb.showerror("IA", str(err))
+                return
+            if res:
+                self.title_var.set(res)
+                self._toast("Titre IA appliqué")
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     def _ai_all(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: mb.showinfo("IA", "Aucun texte à analyser"); return
+        if not text:
+            mb.showinfo("IA", "Aucun texte à analyser")
+            return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         max_len = int(cfg.get('ai_title_max_len', 80))
@@ -405,9 +454,13 @@ class EditClipWindow(tk.Toplevel):
             cats  = ai_generate_categories(text, user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
             return {"title": title, "tags": tags, "categories": cats}
         def done(res, err):
-            if err: mb.showerror("IA", str(err)); return
-            if not res: return
-            if res.get('title'): self.title_var.set(res['title'])
+            if err:
+                mb.showerror("IA", str(err))
+                return
+            if not res:
+                return
+            if res.get('title'):
+                self.title_var.set(res['title'])
             if res.get('tags') is not None:
                 existing = [p.strip() for p in (self.tags_var.get() or '').replace(';', ',').split(',') if p.strip()]
                 merged = list(dict.fromkeys(existing + (res['tags'] or [])))
@@ -463,7 +516,8 @@ class EditClipWindow(tk.Toplevel):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
-        if not paths: return
+        if not paths:
+            return
         
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
@@ -536,7 +590,8 @@ class EditClipWindow(tk.Toplevel):
                 added += 1
             except Exception as e:
                 mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
-        if added: self._toast(f"{added} fichier(s) joint(s)")
+        if added:
+            self._toast(f"{added} fichier(s) joint(s)")
 
     def _attach_file_classic_editor(self, mime, data):
         """Extraction classique de texte pour fallback"""
@@ -564,7 +619,8 @@ class EditClipWindow(tk.Toplevel):
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     def _reload_thumbnails(self):
-        for w in self._thumb_container.winfo_children(): w.destroy()
+        for w in self._thumb_container.winfo_children():
+            w.destroy()
         self._thumb_photos.clear()
         self._has_images = False
         self._has_pdfs = False
@@ -574,7 +630,7 @@ class EditClipWindow(tk.Toplevel):
         for fid, fn, mime, blob in rows:
             if mime and mime.startswith('image/') and Image is not None and ImageTk is not None:
                 try:
-                    img = Image.open(BytesIO(blob))
+                    img = Image.open(io.BytesIO(blob))
                     img.thumbnail((240, 180))
                     ph = ImageTk.PhotoImage(img)
                     lbl = tk.Label(self._thumb_container, image=ph, cursor='hand2')
@@ -583,7 +639,8 @@ class EditClipWindow(tk.Toplevel):
                     lbl.bind('<Button-1>', lambda e, b=blob, t=fn: self._open_image_preview(b, t))
                     self._thumb_photos.append(ph)
                     self._has_images = True
-                except Exception: continue
+                except Exception:
+                    continue
             elif mime == 'application/pdf':
                 card = ttk.Frame(self._thumb_container, relief='ridge', borderwidth=1)
                 card.pack(fill='x', pady=4)
@@ -606,51 +663,62 @@ class EditClipWindow(tk.Toplevel):
     def _selected_attachment_id(self):
         try:
             sel = self._attach_list.curselection()
-            if not sel: return None
+            if not sel:
+                return None
             return int(self._attach_list.get(sel[0]).split(' - ', 1)[0])
-        except Exception: return None
+        except Exception:
+            return None
 
     def _open_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._open_attachment_by_id(fid)
 
     def _export_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._export_attachment_by_id(fid)
 
     def _delete_attachment_selected(self):
         fid = self._selected_attachment_id()
-        if fid is None: return
+        if fid is None:
+            return
         self._delete_attachment_by_id(fid)
 
     def _open_attachment_by_id(self, fid):
         conn = create_conn()
         row = conn.execute("SELECT filename, data, mime FROM files WHERE id=?", (fid,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         fn, data, mime = row
         ext = pathlib.Path(fn).suffix or '.' + (mime.split('/')[-1] if mime else 'bin')
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(data)
             tmp.flush()
-            try: os.startfile(tmp.name)
-            except Exception: mb.showinfo("Ouvrir", f"Fichier enregistré: {tmp.name}")
+            try:
+                os.startfile(tmp.name)
+            except Exception:
+                mb.showinfo("Ouvrir", f"Fichier enregistré: {tmp.name}")
 
     def _export_attachment_by_id(self, fid):
         conn = create_conn()
         row = conn.execute("SELECT filename, data FROM files WHERE id=?", (fid,)).fetchone()
         conn.close()
-        if not row: return
+        if not row:
+            return
         fn, data = row
         path = fd.asksaveasfilename(initialfile=fn, defaultextension=pathlib.Path(fn).suffix or '.pdf')
-        if not path: return
+        if not path:
+            return
         pathlib.Path(path).write_bytes(data)
         self._toast("Fichier exporté")
 
     def _delete_attachment_by_id(self, fid):
-        if not mb.askyesno("Supprimer", "Supprimer cette pièce jointe ?"): return
+        if not mb.askyesno("Supprimer", "Supprimer cette pièce jointe ?"):
+            return
         conn = create_conn()
         conn.execute("DELETE FROM files WHERE id=?", (fid,))
         conn.commit()
@@ -659,9 +727,10 @@ class EditClipWindow(tk.Toplevel):
         self._reload_thumbnails()
 
     def _open_image_preview(self, blob, title):
-        if Image is None or ImageTk is None: return
+        if Image is None or ImageTk is None:
+            return
         try:
-            img = Image.open(BytesIO(blob))
+            img = Image.open(io.BytesIO(blob))
             win = tk.Toplevel(self)
             win.title(title)
             win.geometry("900x700")
@@ -678,7 +747,9 @@ class EditClipWindow(tk.Toplevel):
                     state["ph"] = ph
                     canvas.delete('all')
                     canvas.create_image(w//2, h//2, image=ph, anchor='center')
-                except Exception: pass
+                except Exception:
+                    pass
             canvas.bind('<Configure>', lambda e: render())
             render()
-        except Exception: pass
+        except Exception:
+            pass

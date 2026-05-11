@@ -1,5 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
@@ -86,6 +92,7 @@ class BufferApp(tk.Tk):
         self.floating_icons_y = 200
         self._float_win = None
         self._search_win = None
+        self._first_clip_id_for_session = None
         self._setup_config()
         self.build_ui()
         self.start_clip_watcher()
@@ -359,7 +366,8 @@ class BufferApp(tk.Tk):
             txt = self.text_area.get(start, end)
         from tkinter import simpledialog
         url = simpledialog.askstring("Lien", "URL:")
-        if not url: return
+        if not url:
+            return
         label = txt or simpledialog.askstring("Lien", "Texte du lien:", initialvalue=url) or url
         if start and end:
             self.text_area.delete(start, end)
@@ -369,11 +377,16 @@ class BufferApp(tk.Tk):
             self.text_area.insert(idx, f"[{label}]({url})")
 
     def _undo_buf(self):
-        try: self.text_area.edit_undo()
-        except tk.TclError: pass
+        try:
+            self.text_area.edit_undo()
+        except tk.TclError:
+            pass
+
     def _redo_buf(self):
-        try: self.text_area.edit_redo()
-        except tk.TclError: pass
+        try:
+            self.text_area.edit_redo()
+        except tk.TclError:
+            pass
 
     def _bind_editor_shortcuts(self):
         for keys, func in (
@@ -400,7 +413,6 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
@@ -422,7 +434,6 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
@@ -471,7 +482,8 @@ class BufferApp(tk.Tk):
         except Exception:
             default_url = self.last_source_url or ""
         url = simpledialog.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
-        if not url: return
+        if not url:
+            return
 
         cfg = load_config()
         auto_analyze_web = cfg.get('auto_analyze_web', True)
@@ -539,7 +551,7 @@ class BufferApp(tk.Tk):
                     if hasattr(self, '_search_win') and self._search_win:
                         try:
                             self._search_win.refresh_results()
-                        except:
+                        except Exception:
                             pass
                     
                     # Ouvrir l'éditeur
@@ -601,7 +613,7 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
+            from ..ai import ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -644,14 +656,16 @@ class BufferApp(tk.Tk):
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
-        if not paths: return
-        
+        if not paths:
+            return
+
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -674,17 +688,17 @@ class BufferApp(tk.Tk):
                         lang = cfg.get('ai_lang', 'fr')
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
-                    def done_pdf(pdf_result, err):
+                    def done_pdf(pdf_result, err, d=data, s=sha, m=mime, t=title):
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
+                            self._attach_file_classic(d, s, m, t)
                             return
                         
                         if pdf_result and pdf_result.get('success'):
                             # Créer le clip avec le résumé IA
                             formatted_content = pdf_result['formatted_content']
-                            pdf_title = pdf_result.get('title', title)
+                            pdf_title = pdf_result.get('title', t)
                             
                             conn = create_conn()
                             conn.execute(
@@ -695,12 +709,11 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            self._maybe_open_first_clip(clip_id)
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
-                                         (clip_id, title, mime, len(data), sha, data))
+                                         (clip_id, t, m, len(d), s, d))
                             conn.commit()
                             conn.close()
                             
@@ -715,7 +728,7 @@ class BufferApp(tk.Tk):
                         
                         else:
                             # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
+                            self._attach_file_classic(d, s, m, t)
                         
                         # Réactiver l'interface
                         self.after(0, lambda: self._set_ui_busy(False))
@@ -724,7 +737,7 @@ class BufferApp(tk.Tk):
                     runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
                 else:
                     # Import classique pour non-PDF ou si analyse désactivée
-                    self._attach_file_classic(p, data, sha, mime, title)
+                    self._attach_file_classic(data, sha, mime, title)
                 
                 added += 1
             except Exception as e:
@@ -732,10 +745,13 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
 
-    def _attach_file_classic(self, file_path, data, sha, mime, title):
+    def _maybe_open_first_clip(self, clip_id):
+        if self._first_clip_id_for_session is None:
+            self._first_clip_id_for_session = clip_id
+            self.after(100, lambda: EditClipWindow(self, clip_id))
+
+    def _attach_file_classic(self, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
         conn = create_conn()
         conn.execute(
@@ -745,8 +761,7 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        self._maybe_open_first_clip(clip_id)
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -788,8 +803,10 @@ class BufferApp(tk.Tk):
 
     # ---------- floating icons ----------
     def _create_floating_icons(self):
-        if not self.floating_icons_enabled: return
-        if self._float_win and self._float_win.winfo_exists(): return
+        if not self.floating_icons_enabled:
+            return
+        if self._float_win and self._float_win.winfo_exists():
+            return
         win = tk.Toplevel(self)
         self._float_win = win
         win.overrideredirect(True)
@@ -874,7 +891,8 @@ class BufferApp(tk.Tk):
         self._float_pos = (self._float_win.winfo_x(), self._float_win.winfo_y())
 
     def _float_on_drag(self, event):
-        if not hasattr(self, '_drag_start'): return
+        if not hasattr(self, '_drag_start'):
+            return
         dx = event.x_root - self._drag_start[0]
         dy = event.y_root - self._drag_start[1]
         x = max(0, self._float_pos[0] + dx)
@@ -889,7 +907,8 @@ class BufferApp(tk.Tk):
             cfg['floating_icons_x'] = self.floating_icons_x
             cfg['floating_icons_y'] = self.floating_icons_y
             save_config(cfg)
-        except Exception: pass
+        except Exception:
+            pass
 
     def _float_on_enter(self, event=None):
         self.deiconify()
@@ -910,15 +929,24 @@ class BufferApp(tk.Tk):
         except Exception:
             pass
 
-    def _float_green_click(self): self.deiconify(); self.lift(); self.focus_force()
-    def _float_red_click(self): self.withdraw()
-    def _float_search_click(self): self.open_search()
+    def _float_green_click(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _float_red_click(self):
+        self.withdraw()
+
+    def _float_search_click(self):
+        self.open_search()
 
     # ---------- divers ----------
     def show_toast(self, text):
         try:
-            if hasattr(self, '_toast') and self._toast: self._toast.destroy()
-        except: pass
+            if hasattr(self, '_toast') and self._toast:
+                self._toast.destroy()
+        except Exception:
+            pass
         self._toast = tk.Toplevel(self)
         self._toast.wm_overrideredirect(True)
         self._toast.attributes('-topmost', True)
@@ -966,8 +994,9 @@ class BufferApp(tk.Tk):
             conn.close()
             
             for tid, title, due_at, reminder_days in rows:
-                if tid in self._reminded_ids: continue
-                
+                if tid in self._reminded_ids:
+                    continue
+
                 # Calculer le délai de rappel pour cette tâche
                 if reminder_days is not None:
                     if reminder_days == 0:
@@ -998,8 +1027,9 @@ class BufferApp(tk.Tk):
                         self.show_toast(f"🚨 Échéance dépassée: {title}")
                     
                     self._reminded_ids.add(tid)
-                    
-        except Exception: pass
+
+        except Exception:
+            pass
         self.after(self._reminder_interval_ms, self._check_task_reminders)
 
     # ---------- fenàƒÂªtres ----------
@@ -1017,14 +1047,18 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
-        except Exception: return
+            import ctypes
+            import ctypes.wintypes as wt
+        except Exception:
+            return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
         MOD_SHIFT   = 0x0004
         VK_M = 0x4D
         WM_HOTKEY = 0x0312
-        if not user32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_SHIFT, VK_M): return
+        if not user32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_SHIFT, VK_M):
+            return
+
         def loop():
             msg = wt.MSG()
             while True:
@@ -1033,6 +1067,7 @@ class BufferApp(tk.Tk):
                         self.event_generate("<<GlobalPasteSend>>", when="tail")
                     user32.TranslateMessage(ctypes.byref(msg))
                     user32.DispatchMessageW(ctypes.byref(msg))
-                else: break
+                else:
+                    break
         threading.Thread(target=loop, daemon=True).start()
         self.bind("<<GlobalPasteSend>>", lambda e: self.paste_and_send())

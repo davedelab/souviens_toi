@@ -1,8 +1,12 @@
-import tkinter as tk, tkinter.ttk as ttk, tkinter.filedialog as fd, tkinter.messagebox as mb, tkinter.simpledialog as sd
-import json, pathlib, datetime as dt
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.filedialog as fd
+import tkinter.messagebox as mb
+import tkinter.simpledialog as sd
+import pathlib
 from ..db import create_conn
 from ..services.importer import migrate_from_db
-from ..config import load_config, save_config, DB_FILE, CONFIG_FILE
+from ..config import load_config, save_config
 
 class OptionsWindow(tk.Toplevel):
     def __init__(self, master):
@@ -98,7 +102,6 @@ class OptionsWindow(tk.Toplevel):
         
         def clean_corrupted_html():
             import tkinter.messagebox as tk_mb
-            from ..db import create_conn
             conn = create_conn()
             # Supprimer les fichiers HTML corrompus (taille suspecte ou contenu binaire)
             corrupted = conn.execute("""
@@ -162,30 +165,39 @@ class OptionsWindow(tk.Toplevel):
         actions.pack(fill='x', padx=8, pady=4)
         def add_cat():
             name = sd.askstring("Nouvelle catégorie", "Nom de la catégorie:")
-            if name: self._cats_listbox.insert('end', name.strip())
+            if name:
+                self._cats_listbox.insert('end', name.strip())
+
         def rename_cat():
             sel = self._cats_listbox.curselection()
-            if not sel: return
+            if not sel:
+                return
             cur = self._cats_listbox.get(sel[0])
             name = sd.askstring("Renommer", "Nouveau nom:", initialvalue=cur)
             if name is not None:
                 self._cats_listbox.delete(sel[0])
                 self._cats_listbox.insert(sel[0], name.strip())
+
         def delete_cat():
             sel = self._cats_listbox.curselection()
-            if not sel: return
+            if not sel:
+                return
             self._cats_listbox.delete(sel[0])
+
         def move_up():
             sel = self._cats_listbox.curselection()
-            if not sel or sel[0] == 0: return
+            if not sel or sel[0] == 0:
+                return
             i = sel[0]
             val = self._cats_listbox.get(i)
             self._cats_listbox.delete(i)
             self._cats_listbox.insert(i-1, val)
             self._cats_listbox.selection_set(i-1)
+
         def move_down():
             sel = self._cats_listbox.curselection()
-            if not sel or sel[0] == self._cats_listbox.size()-1: return
+            if not sel or sel[0] == self._cats_listbox.size()-1:
+                return
             i = sel[0]
             val = self._cats_listbox.get(i)
             self._cats_listbox.delete(i)
@@ -207,7 +219,8 @@ class OptionsWindow(tk.Toplevel):
         ttk.Entry(pick_frame, textvariable=db_path_var).pack(side='left', fill='x', expand=True)
         def browse_db():
             p = fd.askopenfilename(filetypes=[["SQLite","*.db"],["Tous","*.*"]])
-            if p: db_path_var.set(p)
+            if p:
+                db_path_var.set(p)
         ttk.Button(pick_frame, text="Parcourir¦", command=browse_db).pack(side='left', padx=6)
 
         def do_import():
@@ -218,10 +231,14 @@ class OptionsWindow(tk.Toplevel):
             def work():
                 return migrate_from_db(path)
             def done(res, err):
-                if err: mb.showerror("Import", f"Echec: {err}")
-                else: mb.showinfo("Import", f"Import terminé: {res} éléments ajoutés")
-                try: self.master.refresh()
-                except Exception: pass
+                if err:
+                    mb.showerror("Import", f"Echec: {err}")
+                else:
+                    mb.showinfo("Import", f"Import terminé: {res} éléments ajoutés")
+                try:
+                    self.master.refresh()
+                except Exception:
+                    pass
             from ..services.async_worker import runner
             runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
             self.master.show_toast("Import en arrière-plan¦")
@@ -269,14 +286,16 @@ class OptionsWindow(tk.Toplevel):
                 self.master._reminder_interval_ms = max(1, int(rem_interval_var.get())) * 60 * 60 * 1000  # heures -> ms
                 self.master._reminder_lead_sec = max(0, int(rem_lead_var.get())) * 24 * 60 * 60  # jours -> secondes
                 self.master._check_task_reminders()
-            except Exception: pass
+            except Exception:
+                pass
             # repositionner flottants
             try:
                 if self.master._float_win and self.master._float_win.winfo_exists():
                     self.master._destroy_floating_icons()
                 if self.master.floating_icons_enabled:
                     self.master._create_floating_icons()
-            except Exception: pass
+            except Exception:
+                pass
             mb.showinfo("Langue", "La modification de langue s'appliquera après redémarrage.")
             self.destroy()
         ttk.Button(btns, text="Appliquer", command=apply).pack(side='right', padx=4)

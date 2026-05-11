@@ -13,7 +13,8 @@ class Tooltip:
         widget.bind("<Motion>", self.move)
 
     def show(self, e=None):
-        if self.tip: return
+        if self.tip:
+            return
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
         self.tip.attributes('-topmost', True)
@@ -22,7 +23,8 @@ class Tooltip:
         self.move(e)
 
     def move(self, e=None):
-        if not self.tip: return
+        if not self.tip:
+            return
         x = (e.x_root if e else self.widget.winfo_rootx()) + 12
         y = (e.y_root if e else self.widget.winfo_rooty()) + 12
         self.tip.wm_geometry(f"+{x}+{y}")
