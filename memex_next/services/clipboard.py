@@ -1,10 +1,12 @@
-### memex_next/services/clipboard.py
-import sys, subprocess, pathlib
+import sys
+import subprocess
+
 try:
     import win32clipboard
 except Exception:
     win32clipboard = None
 import pyperclip
+
 
 def get_text():
     """Multi-plateforme : renvoie le texte du presse-papiers."""
@@ -12,6 +14,7 @@ def get_text():
         return pyperclip.paste().strip()
     except Exception:
         return ""
+
 
 def get_selected_text():
     """Tente de récupérer la sélection courante (X11/macOS/Windows)."""
@@ -24,7 +27,11 @@ def get_selected_text():
             win32clipboard.OpenClipboard()
             try:
                 data = win32clipboard.GetClipboardData(win32clipboard.CF_TEXT)
-                return (data.decode(errors="ignore") if isinstance(data, (bytes, bytearray)) else str(data)).strip()
+                return (
+                    data.decode(errors="ignore")
+                    if isinstance(data, (bytes, bytearray))
+                    else str(data)
+                ).strip()
             finally:
                 win32clipboard.CloseClipboard()
     except Exception:

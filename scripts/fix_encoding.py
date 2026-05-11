@@ -19,7 +19,9 @@ def detect_text(raw: bytes, encodings: Sequence[str]) -> Tuple[str, str]:
             return encoding, raw.decode(encoding)
         except UnicodeDecodeError:
             continue
-    raise UnicodeDecodeError("utf-8", raw, 0, 1, "none of the candidate encodings succeeded")
+    raise UnicodeDecodeError(
+        "utf-8", raw, 0, 1, "none of the candidate encodings succeeded"
+    )
 
 
 def process_file(path: Path, candidates: Sequence[str], dry_run: bool) -> str | None:
@@ -54,8 +56,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_TARGETS,
         help="Paths or directories to scan (defaults to memex_next/).",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Show which files need rewriting.")
-    parser.add_argument("--encoding", default="cp1252", help="Fall-back encoding to try after UTF-8.")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show which files need rewriting."
+    )
+    parser.add_argument(
+        "--encoding", default="cp1252", help="Fall-back encoding to try after UTF-8."
+    )
     args = parser.parse_args(argv)
 
     candidates = ["utf-8", args.encoding]
@@ -75,7 +81,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{path}: detected {detected} -> utf-8 {action}")
 
     if args.dry_run:
-        print(f"Dry run: {rewritten} file(s) would be rewritten, {skipped} already UTF-8.")
+        print(
+            f"Dry run: {rewritten} file(s) would be rewritten, {skipped} already UTF-8."
+        )
     else:
         print(f"Rewritten {rewritten} file(s); {skipped} already UTF-8.")
     return 0

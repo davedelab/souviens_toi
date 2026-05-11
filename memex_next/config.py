@@ -1,8 +1,11 @@
-import os, json, pathlib
+import json
+import pathlib
+
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
-DB_FILE      = BASE_DIR / "souviens_toi.db"
-CONFIG_FILE  = BASE_DIR / "souviens_config.json"
-SEPARATOR    = "\n---\n"
+DB_FILE = BASE_DIR / "souviens_toi.db"
+CONFIG_FILE = BASE_DIR / "souviens_config.json"
+SEPARATOR = "\n---\n"
+
 
 def load_config():
     try:
@@ -10,5 +13,8 @@ def load_config():
     except Exception:
         return {}
 
+
 def save_config(data: dict):
-    CONFIG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    CONFIG_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
