@@ -1,8 +1,7 @@
 import tkinter as tk, tkinter.ttk as ttk, tkinter.filedialog as fd, tkinter.messagebox as mb, tkinter.simpledialog as sd
-import json, pathlib, datetime as dt
-from ..db import create_conn
+import pathlib
 from ..services.importer import migrate_from_db
-from ..config import load_config, save_config, DB_FILE, CONFIG_FILE
+from ..config import load_config, save_config
 
 class OptionsWindow(tk.Toplevel):
     def __init__(self, master):
