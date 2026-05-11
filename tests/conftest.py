@@ -18,7 +18,7 @@ mock_modules = [
     "pytesseract",
     "pdfplumber",
     "trafilatura",
-    "markdownify"
+    "markdownify",
 ]
 
 for mod_name in mock_modules:

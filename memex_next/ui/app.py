@@ -539,7 +539,7 @@ class BufferApp(tk.Tk):
                     if hasattr(self, '_search_win') and self._search_win:
                         try:
                             self._search_win.refresh_results()
-                        except:
+                        except Exception:
                             pass
                     
                     # Ouvrir l'éditeur
@@ -710,7 +710,7 @@ class BufferApp(tk.Tk):
                             if hasattr(self, '_search_win') and self._search_win:
                                 try:
                                     self._search_win.refresh_results()
-                                except:
+                                except Exception:
                                     pass
                         
                         else:
@@ -746,7 +746,7 @@ class BufferApp(tk.Tk):
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+            self._self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -918,7 +918,7 @@ class BufferApp(tk.Tk):
     def show_toast(self, text):
         try:
             if hasattr(self, '_toast') and self._toast: self._toast.destroy()
-        except: pass
+        except Exception: pass
         self._toast = tk.Toplevel(self)
         self._toast.wm_overrideredirect(True)
         self._toast.attributes('-topmost', True)
