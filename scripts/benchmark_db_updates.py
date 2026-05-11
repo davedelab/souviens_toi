@@ -1,7 +1,6 @@
 import sqlite3
 import time
 import json
-import sys
 
 def setup_db():
     conn = sqlite3.connect(":memory:")
