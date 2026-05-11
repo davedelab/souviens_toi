@@ -695,7 +695,7 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
+                            if first_clip_id is None:
                                 first_clip_id = clip_id
                             
                             # Joindre le fichier PDF
