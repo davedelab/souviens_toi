@@ -1,12 +1,27 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk
+import tkinter.ttk as ttk
+import threading
+import time
+import datetime as dt
+import sys
+import pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
 from ..services.async_worker import runner
 from ..config import load_config, save_config, SEPARATOR
 from ..db import create_conn
-from ..ai import ai_generate_tags, ai_generate_title
+import hashlib
+import mimetypes
+import tkinter.messagebox as mb
+import tkinter.simpledialog as sd
+import tkinter.filedialog as fd
+from ..ai import ai_generate_tags, ai_generate_title, ai_generate_categories, ai_suggest_new_categories
+from ..web_capture import capture_web_link_complete
+from ..scrap import capture_article
+from ..ocr import extract_text_from_blob
+from ..pdf_analyzer import analyze_pdf_complete
 from .search import SearchWindow
 from .editor import EditClipWindow
 from .tasks import TasksWindow
@@ -52,8 +67,7 @@ class BufferApp(tk.Tk):
     def capture_selection_markdown(self):
         txt = get_text()
         if not txt:
-            from tkinter import messagebox
-            messagebox.showinfo("Markdown", "Presse-papiers vide. Copiez d'abord une sélection depuis votre navigateur.")
+            mb.showinfo("Markdown", "Presse-papiers vide. Copiez d'abord une sélection depuis votre navigateur.")
             return
         looks_html = ('<' in txt and '>' in txt and ('</' in txt or '<p' in txt or '<div' in txt))
         if looks_html:
@@ -357,10 +371,9 @@ class BufferApp(tk.Tk):
         txt = ''
         if start and end:
             txt = self.text_area.get(start, end)
-        from tkinter import simpledialog
-        url = simpledialog.askstring("Lien", "URL:")
+        url = sd.askstring("Lien", "URL:")
         if not url: return
-        label = txt or simpledialog.askstring("Lien", "Texte du lien:", initialvalue=url) or url
+        label = txt or sd.askstring("Lien", "Texte du lien:", initialvalue=url) or url
         if start and end:
             self.text_area.delete(start, end)
             self.text_area.insert(start, f"[{label}]({url})")
@@ -392,20 +405,17 @@ class BufferApp(tk.Tk):
     def ai_title_from_buffer(self):
         text = self.text_area.get('1.0','end').strip()
         if not text:
-            from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucun texte dans le buffer")
+            mb.showinfo("IA", "Aucun texte dans le buffer")
             return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
         def done(res, err):
             if err:
-                from tkinter import messagebox
-                messagebox.showerror("IA", str(err))
+                mb.showerror("IA", str(err))
                 return
             self.title_var.set(res or self.title_var.get())
             self.show_toast("Titre IA Appliqué")
@@ -414,20 +424,17 @@ class BufferApp(tk.Tk):
     def ai_fill_tags_from_buffer(self):
         content = self.text_area.get('1.0','end').strip()
         if not content:
-            from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucun texte à analyser.")
+            mb.showinfo("IA", "Aucun texte à analyser.")
             return
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
         def done(res, err):
             if err:
-                from tkinter import messagebox
-                messagebox.showerror("IA", str(err))
+                mb.showerror("IA", str(err))
             else:
                 self.tags_var.set(', '.join(res or []))
                 self.show_toast("Tags IA remplis")
@@ -436,25 +443,21 @@ class BufferApp(tk.Tk):
     def ai_fill_categories_from_buffer(self):
         text = self.text_area.get('1.0','end').strip()
         if not text:
-            from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucun texte dans le buffer")
+            mb.showinfo("IA", "Aucun texte dans le buffer")
             return
         cfg = load_config()
         user_cats = cfg.get('user_categories', [])
         if not user_cats:
-            from tkinter import messagebox
-            messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
+            mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
 
         def work():
-            from ..ai import ai_generate_categories, ai_suggest_new_categories
             picked = ai_generate_categories(text, user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=1) or []
             sugg   = ai_suggest_new_categories(text, existing_list=user_cats, lang=cfg.get('ai_lang','fr'), max_n=1) or []
             return {"from_list": picked, "suggested": sugg}
         def done(res, err):
             if err:
-                from tkinter import messagebox
-                messagebox.showerror("IA", str(err))
+                mb.showerror("IA", str(err))
                 return
             from_list = (res or {}).get('from_list') or []
             suggested = (res or {}).get('suggested') or []
@@ -465,12 +468,11 @@ class BufferApp(tk.Tk):
 
     # ---------- web ----------
     def capture_article(self):
-        from tkinter import simpledialog
         try:
             default_url = self.last_source_url or (pyperclip.paste().strip() if self._looks_like_url(pyperclip.paste().strip()) else "")
         except Exception:
             default_url = self.last_source_url or ""
-        url = simpledialog.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
+        url = sd.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
         if not url: return
 
         cfg = load_config()
@@ -482,7 +484,6 @@ class BufferApp(tk.Tk):
             self.after(0, lambda: self._set_ui_busy(True))
             
             def work_smart(u=url):
-                from ..web_capture import capture_web_link_complete
                 cfg = load_config()
                 lang = cfg.get('ai_lang', 'fr')
                 return capture_web_link_complete(u, lang)
@@ -518,7 +519,6 @@ class BufferApp(tk.Tk):
                     if save_html:
                         raw_html = web_result.get('web_data', {}).get('raw_html', '')
                         if raw_html:
-                            import hashlib
                             data = raw_html.encode('utf-8', errors='ignore')
                             sha = hashlib.sha256(data).hexdigest()
                             fn = (web_title or 'page') + '.html'
@@ -562,7 +562,6 @@ class BufferApp(tk.Tk):
     def _capture_article_classic(self, url):
         """Capture classique d'article web (fallback)"""
         def work(u=url):
-            from ..scrap import capture_article
             html, md, title = capture_article(u)
             from ..db import create_conn
             conn = create_conn()
@@ -575,7 +574,6 @@ class BufferApp(tk.Tk):
             conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
                          (u, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
             # sauve HTML brut
-            import hashlib
             data = html.encode('utf-8', errors='ignore')
             sha = hashlib.sha256(data).hexdigest()
             fn = (title or pathlib.Path(u).name or 'page') + '.html'
@@ -588,8 +586,7 @@ class BufferApp(tk.Tk):
         
         def done(clip_id, err):
             if err:
-                from tkinter import messagebox
-                messagebox.showerror("Article", f"Erreur de capture: {str(err)}")
+                mb.showerror("Article", f"Erreur de capture: {str(err)}")
             else:
                 self.show_toast("Article capturé en Markdown")
                 if clip_id:
@@ -601,7 +598,6 @@ class BufferApp(tk.Tk):
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
             
@@ -639,19 +635,18 @@ class BufferApp(tk.Tk):
 
     # ---------- files ----------
     def attach_file(self):
-        from tkinter import filedialog
-        paths = filedialog.askopenfilenames(
+        paths = fd.askopenfilenames(
             filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
                        ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
         )
-        if not paths: return
+        if not paths:
+            return
         
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
         
-        import hashlib, mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -669,7 +664,6 @@ class BufferApp(tk.Tk):
                     self.after(0, lambda: self._set_ui_busy(True))
                     
                     def work_pdf(pdf_path=p):
-                        from ..pdf_analyzer import analyze_pdf_complete
                         cfg = load_config()
                         lang = cfg.get('ai_lang', 'fr')
                         return analyze_pdf_complete(pdf_path, lang, context="new")
@@ -695,8 +689,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -728,12 +722,11 @@ class BufferApp(tk.Tk):
                 
                 added += 1
             except Exception as e:
-                from tkinter import messagebox
-                messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
+                mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -745,8 +738,8 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        if not hasattr(self, '_first_clip_id_for_session') or self._first_clip_id_for_session is None:
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -754,7 +747,6 @@ class BufferApp(tk.Tk):
 
         # Extraction OCR/texte async (comportement original)
         def work(clip_id=clip_id, mime=mime, blob=data):
-            from ..ocr import extract_text_from_blob
             text = extract_text_from_blob(blob, mime)
             if text:
                 conn = create_conn()
@@ -1017,7 +1009,8 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
