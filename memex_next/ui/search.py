@@ -2,6 +2,7 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 import datetime as dt
+import json
 import pathlib
 import queue
 from ..db import create_conn
@@ -188,35 +189,30 @@ class SearchWindow(tk.Toplevel):
             rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
         else:
             rows = self._search_sql(conn, query, period)
-        clips = [
-            dict(
-                zip(
-                    [
-                        c[0]
-                        for c in conn.execute("SELECT * FROM clips LIMIT 1").description
-                    ],
-                    r,
-                )
-            )
-            for r in rows
-        ]
+
+        # Get column names once to avoid N+1 queries in the list comprehension
+        cursor = conn.execute("SELECT * FROM clips LIMIT 1")
+        col_names = [c[0] for c in cursor.description]
+        clips = [dict(zip(col_names, r)) for r in rows]
         if self.read_later_only.get():
             clips = [c for c in clips if c.get("read_later")]
         if self.active_tag_filters:
+            active_tags_lower = {tg.lower() for tg in self.active_tag_filters}
             clips = [
                 c
                 for c in clips
                 if any(
-                    t.lower() in {tg.lower() for tg in self.active_tag_filters}
+                    t.lower() in active_tags_lower
                     for t in (c.get("tags") or "").replace(";", ",").split(",")
                 )
             ]
         if self.active_category_filters:
+            active_cats_lower = {c2.lower() for c2 in self.active_category_filters}
             clips = [
                 c
                 for c in clips
                 if any(
-                    cat.lower() in {c2.lower() for c2 in self.active_category_filters}
+                    cat.lower() in active_cats_lower
                     for cat in (c.get("categories") or "").split(",")
                 )
             ]
@@ -233,10 +229,15 @@ class SearchWindow(tk.Toplevel):
         # Récupérer le nombre de pièces jointes pour chaque clip
         clip_ids = [c["id"] for c in clips]
         if clip_ids:
-            placeholders = ",".join("?" * len(clip_ids))
+            # Using SQLite's json_each to bypass the 999 parameter limit and improve performance
             attachment_counts = conn.execute(
-                f"SELECT clip_id, COUNT(*) FROM files WHERE clip_id IN ({placeholders}) GROUP BY clip_id",
-                clip_ids,
+                """
+                SELECT clip_id, COUNT(*)
+                FROM files
+                WHERE clip_id IN (SELECT value FROM json_each(?))
+                GROUP BY clip_id
+                """,
+                (json.dumps(clip_ids),),
             ).fetchall()
             attachment_map = {clip_id: count for clip_id, count in attachment_counts}
         else:
@@ -395,10 +396,12 @@ class SearchWindow(tk.Toplevel):
 
     def clear_tag_filters(self):
         self.active_tag_filters.clear()
+
         self.refresh()
 
     def clear_category_filters(self):
         self.active_category_filters.clear()
+
         self.refresh()
 
     def clear_all_filters(self):
@@ -853,7 +856,6 @@ class SearchWindow(tk.Toplevel):
                     self.master.show_toast(
                         "Fichier joint" + (" et indexé" if res else "")
                     )
-                    self.on_tree_select()
 
                 runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
                 added += 1
