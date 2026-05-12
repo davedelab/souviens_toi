@@ -117,7 +117,6 @@ class BufferApp(tk.Tk):
         def reg(w):
             self._disableable_widgets.append(w)
             return w
-
         top = ttk.Frame(self)
         top.pack(fill='x', padx=5, pady=5)
 
@@ -752,7 +751,7 @@ class BufferApp(tk.Tk):
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -833,7 +832,6 @@ class BufferApp(tk.Tk):
             b.bind('<ButtonRelease-1>', self._float_save_pos)
             from .widgets import Tooltip
             Tooltip(b, tip)
-            self._disableable_widgets.append(b)
             return b
         
         # Lier aussi le drag au frame
