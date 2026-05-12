@@ -464,99 +464,107 @@ class BufferApp(tk.Tk):
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
 
     # ---------- web ----------
-    def capture_article(self):
+    def _prompt_for_web_url(self) -> str | None:
+        """Demande une URL à l'utilisateur, avec suggestion du presse-papier"""
         from tkinter import simpledialog
         try:
-            default_url = self.last_source_url or (pyperclip.paste().strip() if self._looks_like_url(pyperclip.paste().strip()) else "")
+            paste = pyperclip.paste().strip()
+            default_url = self.last_source_url or (paste if self._looks_like_url(paste) else "")
         except Exception:
             default_url = self.last_source_url or ""
-        url = simpledialog.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
+        return simpledialog.askstring("Capture Web IA", "URL de la page à capturer et analyser:", initialvalue=default_url)
+
+    def _save_smart_capture_to_db(self, url: str, web_result: dict) -> int:
+        """Sauvegarde les résultats d'une capture intelligente en base de données"""
+        cfg = load_config()
+        formatted_content = web_result['formatted_content']
+        web_title = web_result.get('title', 'Page web')
+
+        conn = create_conn()
+        conn.execute(
+            "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web",
+             formatted_content, formatted_content[:150] + '...',
+             self.tags_var.get().strip() or "web", "")
+        )
+        clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Enregistrer l'URL source
+        conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
+                     (url, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
+
+        # Sauvegarder le HTML brut si l'option est activée
+        save_html = cfg.get('save_html_source', False)
+        if save_html:
+            raw_html = web_result.get('web_data', {}).get('raw_html', '')
+            if raw_html:
+                import hashlib
+                data = raw_html.encode('utf-8', errors='ignore')
+                sha = hashlib.sha256(data).hexdigest()
+                fn = (web_title or 'page') + '.html'
+                conn.execute("INSERT INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
+                             (clip_id, fn, 'text/html', len(data), sha, data))
+
+        conn.commit()
+        conn.close()
+
+        self.show_toast("✅ Page web capturée et analysée avec IA!")
+
+        # Génération automatique des tags et catégories en arrière-plan
+        auto_tags = cfg.get('auto_generate_tags_web', True)
+        if auto_tags:
+            self._generate_web_tags_async(clip_id, formatted_content)
+
+        # Rafraîchir la fenêtre de recherche si elle existe
+        if hasattr(self, '_search_win') and self._search_win:
+            try:
+                self._search_win.refresh_results()
+            except:
+                pass
+
+        return clip_id
+
+    def _capture_article_smart(self, url: str):
+        """Orchestre la capture intelligente (IA) en arrière-plan"""
+        self.show_toast("🌐 Capture et analyse IA en cours... Veuillez patienter")
+        self.after(0, lambda: self._set_ui_busy(True))
+
+        def work_smart(u=url):
+            from ..web_capture import capture_web_link_complete
+            cfg = load_config()
+            lang = cfg.get('ai_lang', 'fr')
+            return capture_web_link_complete(u, lang)
+
+        def done_smart(web_result, err):
+            if err:
+                self.show_toast(f"❌ Erreur de capture web: {str(err)}")
+                self._capture_article_classic(url)
+            elif web_result and web_result.get('success'):
+                clip_id = self._save_smart_capture_to_db(url, web_result)
+                self.after(100, lambda: EditClipWindow(self, clip_id))
+            else:
+                error_msg = web_result.get('error', 'Erreur inconnue')
+                self.show_toast(f"⚠️ Capture IA échouée: {error_msg}")
+                self._capture_article_classic(url)
+
+            self.after(0, lambda: self._set_ui_busy(False))
+
+        from ..services.async_worker import runner
+        runner.submit(work_smart, cb=lambda r,e: self.after(0, done_smart, r, e))
+
+    def capture_article(self):
+        """
+        Capture le contenu de l'URL du presse-papier ou d'une URL saisie.
+        Essaie d'extraire le titre, le texte et de générer un résumé.
+        """
+        url = self._prompt_for_web_url()
         if not url: return
 
         cfg = load_config()
-        auto_analyze_web = cfg.get('auto_analyze_web', True)
-        
-        if auto_analyze_web:
-            # Nouvelle capture intelligente avec IA
-            self.show_toast("🌐 Capture et analyse IA en cours... Veuillez patienter")
-            self.after(0, lambda: self._set_ui_busy(True))
-            
-            def work_smart(u=url):
-                from ..web_capture import capture_web_link_complete
-                cfg = load_config()
-                lang = cfg.get('ai_lang', 'fr')
-                return capture_web_link_complete(u, lang)
-            
-            def done_smart(web_result, err):
-                if err:
-                    self.show_toast(f"❌ Erreur de capture web: {str(err)}")
-                    # Fallback vers capture classique
-                    self._capture_article_classic(url)
-                    return
-                
-                if web_result and web_result.get('success'):
-                    # Créer le clip avec le résumé IA
-                    formatted_content = web_result['formatted_content']
-                    web_title = web_result.get('title', 'Page web')
-                    
-                    conn = create_conn()
-                    conn.execute(
-                        "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories) "
-                        "VALUES (?,?,?,?,?,?,?,?)",
-                        (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web", 
-                         formatted_content, formatted_content[:150] + '...', 
-                         self.tags_var.get().strip() or "web", "")
-                    )
-                    clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                    
-                    # Enregistrer l'URL source
-                    conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
-                                 (url, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
-                    
-                    # Sauvegarder le HTML brut si l'option est activée
-                    save_html = cfg.get('save_html_source', False)
-                    if save_html:
-                        raw_html = web_result.get('web_data', {}).get('raw_html', '')
-                        if raw_html:
-                            import hashlib
-                            data = raw_html.encode('utf-8', errors='ignore')
-                            sha = hashlib.sha256(data).hexdigest()
-                            fn = (web_title or 'page') + '.html'
-                            conn.execute("INSERT INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
-                                         (clip_id, fn, 'text/html', len(data), sha, data))
-                    
-                    conn.commit()
-                    conn.close()
-                    
-                    self.show_toast("✅ Page web capturée et analysée avec IA!")
-                    
-                    # Génération automatique des tags et catégories en arrière-plan
-                    auto_tags = cfg.get('auto_generate_tags_web', True)
-                    if auto_tags:
-                        self._generate_web_tags_async(clip_id, formatted_content)
-                    
-                    # Rafraîchir la fenêtre de recherche si elle existe
-                    if hasattr(self, '_search_win') and self._search_win:
-                        try:
-                            self._search_win.refresh_results()
-                        except:
-                            pass
-                    
-                    # Ouvrir l'éditeur
-                    self.after(100, lambda: EditClipWindow(self, clip_id))
-                else:
-                    # Fallback vers capture classique
-                    error_msg = web_result.get('error', 'Erreur inconnue')
-                    self.show_toast(f"⚠️ Capture IA échouée: {error_msg}")
-                    self._capture_article_classic(url)
-                
-                # Réactiver l'interface
-                self.after(0, lambda: self._set_ui_busy(False))
-            
-            from ..services.async_worker import runner
-            runner.submit(work_smart, cb=lambda r,e: self.after(0, done_smart, r, e))
+        if cfg.get('auto_analyze_web', True):
+            self._capture_article_smart(url)
         else:
-            # Capture classique si IA désactivée
             self._capture_article_classic(url)
 
     def _capture_article_classic(self, url):
@@ -651,7 +659,7 @@ class BufferApp(tk.Tk):
         
         import hashlib, mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -695,8 +703,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -732,8 +740,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
