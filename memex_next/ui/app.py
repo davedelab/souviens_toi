@@ -109,19 +109,24 @@ class BufferApp(tk.Tk):
         self.floating_icons_focus  = bool(cfg.get("floating_icons_focus", True))
         self.floating_icons_x      = int(cfg.get("floating_icons_x", 0))
         self.floating_icons_y      = int(cfg.get("floating_icons_y", 200))
+        self._disableable_widgets = []
+        self._first_clip_id_for_session = None
 
     # ---------- UI ----------
     def build_ui(self):
+        def reg(w):
+            self._disableable_widgets.append(w)
+            return w
         top = ttk.Frame(self)
         top.pack(fill='x', padx=5, pady=5)
 
-        self.pause_btn = ttk.Button(top, text=_tr('pause_short'), width=4, command=self.toggle_pause)
+        self.pause_btn = reg(ttk.Button(top, text=_tr('pause_short'), width=4, command=self.toggle_pause))
         self.pause_btn.pack(side='left', padx=2)
 
         def tbtn(parent, text, cmd, w=6, bg="#374151"):
             b = tk.Button(parent, text=text, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
             b.pack(side='left', padx=2)
-            return b
+            return reg(b)
 
         btn_add = tbtn(top, _tr('add'), self.add_clipboard, w=8, bg="#f59e0b")
         btn_send = tbtn(top, _tr('save'), self.send_all, w=10, bg="#16a34a")
@@ -133,7 +138,7 @@ class BufferApp(tk.Tk):
         btn_tasks = tbtn(top, _tr('tasks'), self.open_tasks, w=8, bg="#10b981")
         btn_opt = tbtn(top, _tr('options'), self.open_options, w=8, bg="#6b7280")
 
-        self.pin_btn = tk.Button(top, text=_tr('pin_on'), width=10, command=self.toggle_always_on_top, bg="#f59e0b", fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
+        self.pin_btn = reg(tk.Button(top, text=_tr('pin_on'), width=10, command=self.toggle_always_on_top, bg="#f59e0b", fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0))
         self.pin_btn.pack(side='right', padx=2)
 
         self.state_lbl = ttk.Label(top, text=_tr('state_active'), foreground="green")
@@ -156,11 +161,11 @@ class BufferApp(tk.Tk):
         frm_title = ttk.LabelFrame(self, text="Titre")
         frm_title.pack(fill='x', padx=5, pady=2)
         self.title_var = tk.StringVar(value="")
-        ttk.Entry(frm_title, textvariable=self.title_var).pack(side='left', fill='x', expand=True, padx=2, pady=2)
-        ttk.Button(frm_title, text="Titre", width=5, command=self.set_title_from_selection_or_clipboard).pack(side='right', padx=2)
-        ttk.Button(frm_title, text="AI", width=3, command=self.ai_title_from_buffer).pack(side='right', padx=2)
+        reg(ttk.Entry(frm_title, textvariable=self.title_var)).pack(side='left', fill='x', expand=True, padx=2, pady=2)
+        reg(ttk.Button(frm_title, text="Titre", width=5, command=self.set_title_from_selection_or_clipboard)).pack(side='right', padx=2)
+        reg(ttk.Button(frm_title, text="AI", width=3, command=self.ai_title_from_buffer)).pack(side='right', padx=2)
         self.read_later_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frm_title, text="A lire plus tard", variable=self.read_later_var).pack(side='right', padx=6)
+        reg(ttk.Checkbutton(frm_title, text="A lire plus tard", variable=self.read_later_var)).pack(side='right', padx=6)
 
         # Tags
         frm_tags = ttk.LabelFrame(self, text="Tags (pour l'envoi)")
@@ -168,9 +173,9 @@ class BufferApp(tk.Tk):
         self.tags_var = tk.StringVar(value="")
         tags_row = ttk.Frame(frm_tags)
         tags_row.pack(fill='x', padx=2, pady=2)
-        self.tags_combo = ttk.Combobox(tags_row, textvariable=self.tags_var)
+        self.tags_combo = reg(ttk.Combobox(tags_row, textvariable=self.tags_var))
         self.tags_combo.pack(side='left', fill='x', expand=True)
-        ttk.Button(tags_row, text="AI", width=3, command=self.ai_fill_tags_from_buffer).pack(side='left', padx=4)
+        reg(ttk.Button(tags_row, text="AI", width=3, command=self.ai_fill_tags_from_buffer)).pack(side='left', padx=4)
 
         # Catégories
         frm_cats = ttk.LabelFrame(self, text="Catégories (0-2)")
@@ -182,11 +187,11 @@ class BufferApp(tk.Tk):
         self.cat1_var_buf = tk.StringVar(value="")
         self.cat2_var_buf = tk.StringVar(value="")
         state_main = 'readonly' if self._user_cats_main else 'normal'
-        self.cat1_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat1_var_buf, state=state_main, width=24)
-        self.cat2_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat2_var_buf, state=state_main, width=24)
+        self.cat1_cb_buf = reg(ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat1_var_buf, state=state_main, width=24))
+        self.cat2_cb_buf = reg(ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat2_var_buf, state=state_main, width=24))
         self.cat1_cb_buf.pack(side='left', fill='x', expand=True)
         self.cat2_cb_buf.pack(side='left', fill='x', expand=True, padx=(6,0))
-        ttk.Button(cats_row, text="AI", width=3, command=self.ai_fill_categories_from_buffer).pack(side='left', padx=6)
+        reg(ttk.Button(cats_row, text="AI", width=3, command=self.ai_fill_categories_from_buffer)).pack(side='left', padx=6)
 
         # Toolbar Markdown
         tb = ttk.Frame(self)
@@ -195,7 +200,7 @@ class BufferApp(tk.Tk):
             b = tk.Button(parent, text=txt, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
             b.pack(side='left', padx=2)
             Tooltip(b, tip)
-            return b
+            return reg(b)
         btn(tb, "B", "Gras (Ctrl+B)", lambda: self._md_bold_buf(), w=3, bg="#2563eb")
         btn(tb, "I", "Italique (Ctrl+I)", lambda: self._md_italic_buf(), w=3, bg="#0ea5e9")
         btn(tb, "Link", "Lien (Ctrl+K)", lambda: self._md_link_buf(), w=5, bg="#22c55e")
@@ -210,7 +215,7 @@ class BufferApp(tk.Tk):
         btn(tb, "Undo", "Annuler (Ctrl+Z)", lambda: self._undo_buf(), w=5, bg="#374151")
         btn(tb, "Redo", "Rétablir (Ctrl+Y)", lambda: self._redo_buf(), w=5, bg="#374151")
 
-        self.text_area = scrolledtext.ScrolledText(self, wrap='word', undo=True, autoseparators=True, maxundo=1000)
+        self.text_area = reg(scrolledtext.ScrolledText(self, wrap='word', undo=True, autoseparators=True, maxundo=1000))
         self.text_area.pack(fill='both', expand=True, padx=5, pady=5)
         self._bind_editor_shortcuts()
 
@@ -651,7 +656,7 @@ class BufferApp(tk.Tk):
         
         import hashlib, mimetypes
         added = 0
-        first_clip_id = None
+        self._first_clip_id_for_session = None
         
         for p in paths:
             try:
@@ -695,8 +700,8 @@ class BufferApp(tk.Tk):
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
                             
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
@@ -732,8 +737,8 @@ class BufferApp(tk.Tk):
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -746,7 +751,7 @@ class BufferApp(tk.Tk):
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -776,15 +781,16 @@ class BufferApp(tk.Tk):
 
     def _set_ui_busy(self, busy: bool):
         """Active/désactive l'interface pendant les opérations longues"""
-        try:
-            # Trouver les boutons principaux et les désactiver/activer
-            for widget in self.winfo_children():
-                if hasattr(widget, 'winfo_children'):
-                    for child in widget.winfo_children():
-                        if hasattr(child, 'config') and 'state' in child.keys():
-                            child.config(state='disabled' if busy else 'normal')
-        except Exception:
-            pass  # Ignore les erreurs de configuration UI
+        state = 'disabled' if busy else 'normal'
+        valid_widgets = []
+        for widget in self._disableable_widgets:
+            try:
+                if widget.winfo_exists():
+                    widget.config(state=state)
+                    valid_widgets.append(widget)
+            except Exception:
+                pass
+        self._disableable_widgets = valid_widgets
 
     # ---------- floating icons ----------
     def _create_floating_icons(self):
