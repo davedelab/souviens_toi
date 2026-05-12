@@ -1,7 +1,11 @@
 
 import sys
+import os
 import types
 from unittest.mock import MagicMock
+
+# Ensure the project root is in sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Properly mock tkinter as a package with submodules
 tk = types.ModuleType('tkinter')
@@ -45,8 +49,9 @@ sys.modules['pytesseract'] = MagicMock()
 sys.modules['trafilatura'] = MagicMock()
 sys.modules['markdownify'] = MagicMock()
 
-import pytest
-from memex_next.ui.app import BufferApp
+import pytest  # noqa: E402
+from memex_next.ui.app import BufferApp  # noqa: E402
+
 
 def test_new_methods_present():
     assert hasattr(BufferApp, '_prompt_for_web_url')
