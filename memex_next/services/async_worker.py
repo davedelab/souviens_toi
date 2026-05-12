@@ -1,5 +1,7 @@
 ### memex_next/services/async_worker.py
-import queue, threading
+import queue
+import threading
+
 
 class TaskRunner:
     def __init__(self):
@@ -23,5 +25,6 @@ class TaskRunner:
                     cb(res, err)
                 except Exception:
                     pass
+
 
 runner = TaskRunner()
