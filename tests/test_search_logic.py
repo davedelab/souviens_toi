@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Mock GUI and other external dependencies
 mock_modules = [
@@ -12,7 +12,6 @@ for module in mock_modules:
     sys.modules[module] = MagicMock()
 
 import pytest
-from memex_next.ui.search import SearchWindow
 
 class MockApp(MagicMock):
     def __init__(self, *args, **kwargs):
