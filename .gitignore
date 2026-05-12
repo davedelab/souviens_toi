@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+benchmark_temp.db
+souviens_toi.db
