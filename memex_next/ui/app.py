@@ -1,12 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk, tkinter.ttk as ttk, threading, time, datetime as dt, sys, pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
 from ..services.async_worker import runner
 from ..config import load_config, save_config, SEPARATOR
 from ..db import create_conn
-from ..ai import ai_generate_tags, ai_generate_title
 from .search import SearchWindow
 from .editor import EditClipWindow
 from .tasks import TasksWindow
@@ -675,10 +674,12 @@ class BufferApp(tk.Tk):
                         return analyze_pdf_complete(pdf_path, lang, context="new")
                     
                     def done_pdf(pdf_result, err):
+                        nonlocal first_clip_id
                         if err:
                             self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
                             # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
+                            res_id = self._attach_file_classic(p, data, sha, mime, title)
+                            if first_clip_id is None: first_clip_id = res_id
                             return
                         
                         if pdf_result and pdf_result.get('success'):
@@ -715,7 +716,8 @@ class BufferApp(tk.Tk):
                         
                         else:
                             # Fallback vers import classique
-                            self._attach_file_classic(p, data, sha, mime, title)
+                            res_id = self._attach_file_classic(p, data, sha, mime, title)
+                            if first_clip_id is None: first_clip_id = res_id
                         
                         # Réactiver l'interface
                         self.after(0, lambda: self._set_ui_busy(False))
@@ -724,7 +726,8 @@ class BufferApp(tk.Tk):
                     runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
                 else:
                     # Import classique pour non-PDF ou si analyse désactivée
-                    self._attach_file_classic(p, data, sha, mime, title)
+                    res_id = self._attach_file_classic(p, data, sha, mime, title)
+                    if first_clip_id is None: first_clip_id = res_id
                 
                 added += 1
             except Exception as e:
@@ -745,8 +748,6 @@ class BufferApp(tk.Tk):
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -773,6 +774,7 @@ class BufferApp(tk.Tk):
         
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        return clip_id
 
     def _set_ui_busy(self, busy: bool):
         """Active/désactive l'interface pendant les opérations longues"""

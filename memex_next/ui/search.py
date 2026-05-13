@@ -1,18 +1,13 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
-import tkinter.filedialog as fd
-import tkinter.messagebox as mb
-import tkinter.simpledialog as sd
 import datetime as dt
-import json
 import pathlib
 import queue
-from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories
-from ..config import load_config, save_config
+from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
+from ..config import load_config, save_config, SEPARATOR
 from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
 
@@ -267,7 +262,11 @@ class SearchWindow(tk.Toplevel):
         sel = self.tree.selection()
         if not sel: return
         clip_id = int(sel[0])
-        EditClipWindow(self, clip_id)
+        if clip_id in OPEN_EDITORS:
+            OPEN_EDITORS[clip_id].lift()
+            OPEN_EDITORS[clip_id].focus_force()
+        else:
+            EditClipWindow(self, clip_id)
 
     def delete_clip(self):
         sel = self.tree.selection()
@@ -358,11 +357,14 @@ class SearchWindow(tk.Toplevel):
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags='' OR tags='non traitée par l IA'").fetchall()
             updated = 0
+            updates = []
             for i, raw in rows:
                 tags = ai_generate_tags(raw or '', lang=lang, count=count)
-                conn.execute("UPDATE clips SET tags=? WHERE id=?", (', '.join(tags), i))
+                updates.append((', '.join(tags), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany("UPDATE clips SET tags=? WHERE id=?", updates)
+                conn.commit()
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
@@ -376,11 +378,14 @@ class SearchWindow(tk.Toplevel):
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags LIKE ?", ("%non traitée par l'IA%",)).fetchall()
             updated = 0
+            updates = []
             for i, raw in rows:
                 tags = ai_generate_tags(raw or '', lang=lang, count=count)
-                conn.execute("UPDATE clips SET tags=? WHERE id=?", (', '.join(tags), i))
+                updates.append((', '.join(tags), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany("UPDATE clips SET tags=? WHERE id=?", updates)
+                conn.commit()
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
@@ -395,10 +400,10 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
-            for i in ids:
-                row = conn.execute("SELECT raw_text, tags FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                raw, existing = row
+            placeholders = ','.join('?' * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text, tags FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            updates = []
+            for i, raw, existing in rows:
                 tags_ai = ai_generate_tags(raw or '', lang=lang, count=count)
                 # Effacer "Non traitée par l'IA" s'il est présent
                 if existing and ("Non traitée par l'IA" in existing or "non traitée par l'IA" in existing):
@@ -406,12 +411,13 @@ class SearchWindow(tk.Toplevel):
                 else:
                     existing_list = [p.strip() for p in (existing or '').replace(';', ',').split(',') if p.strip()]
                 merged = list(dict.fromkeys(existing_list + tags_ai))
-                conn.execute("UPDATE clips SET tags=? WHERE id=?", (', '.join(merged), i))
+                updates.append((', '.join(merged), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany("UPDATE clips SET tags=? WHERE id=?", updates)
+                conn.commit()
             conn.close()
             return updated
-        from ..services.async_worker import runner
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
         self.master.show_toast("Tags IA en arrière-plan¦")
     def ai_cats_selected(self):
@@ -426,13 +432,16 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
-            for i in ids:
-                row = conn.execute("SELECT raw_text FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                cats = ai_generate_categories(row[0] or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
-                conn.execute("UPDATE clips SET categories=? WHERE id=?", (', '.join(cats), i))
+            placeholders = ','.join('?' * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            updates = []
+            for i, raw in rows:
+                cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
+                updates.append((', '.join(cats), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany("UPDATE clips SET categories=? WHERE id=?", updates)
+                conn.commit()
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_cats_done", res, err)))
@@ -448,11 +457,14 @@ class SearchWindow(tk.Toplevel):
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE categories IS NULL OR categories='' ").fetchall()
             updated = 0
+            updates = []
             for i, raw in rows:
                 cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
-                conn.execute("UPDATE clips SET categories=? WHERE id=?", (', '.join(cats), i))
+                updates.append((', '.join(cats), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany("UPDATE clips SET categories=? WHERE id=?", updates)
+                conn.commit()
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_cats_done", res, err)))
@@ -470,21 +482,23 @@ class SearchWindow(tk.Toplevel):
         def work():
             conn = create_conn()
             updated = 0
-            for i in ids:
-                row = conn.execute("SELECT raw_text, tags FROM clips WHERE id=?", (i,)).fetchone()
-                if not row: continue
-                raw, existing_tags = row
+            placeholders = ','.join('?' * len(ids))
+            rows = conn.execute(f"SELECT id, raw_text, tags FROM clips WHERE id IN ({placeholders})", ids).fetchall()
+            updates = []
+            for i, raw, existing_tags in rows:
                 title = ai_generate_title(raw or '', lang=lang, max_len=max_len)
                 tags  = ai_generate_tags(raw or '', lang=lang, count=count)
                 cats  = ai_generate_categories(raw or '', user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
                 existing_list = [p.strip() for p in (existing_tags or '').replace(';', ',').split(',') if p.strip()]
                 merged_tags = list(dict.fromkeys(existing_list + tags))
-                conn.execute(
-                    "UPDATE clips SET title=COALESCE(?, title), tags=?, categories=? WHERE id=?",
-                    (title, ', '.join(merged_tags), ', '.join(cats), i)
-                )
+                updates.append((title, ', '.join(merged_tags), ', '.join(cats), i))
                 updated += 1
-            conn.commit()
+            if updates:
+                conn.executemany(
+                    "UPDATE clips SET title=COALESCE(?, title), tags=?, categories=? WHERE id=?",
+                    updates
+                )
+                conn.commit()
             conn.close()
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_all_done", res, err)))
