@@ -1,7 +1,6 @@
 ### memex_next/services/export.py
-import json, os, pathlib, datetime as dt
+import json, pathlib, datetime as dt
 from typing import List, Dict, Any
-from ..models import Clip
 
 def clip_to_markdown(clip: Dict[str, Any]) -> str:
     title   = clip.get("title", "")

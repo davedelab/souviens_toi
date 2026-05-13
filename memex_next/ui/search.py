@@ -1,14 +1,9 @@
 ### memex_next/ui/search.py
 import tkinter as tk
 import tkinter.ttk as ttk
-import tkinter.filedialog as fd
-import tkinter.messagebox as mb
-import tkinter.simpledialog as sd
 import datetime as dt
-import json
 import pathlib
 import queue
-from typing import List, Dict, Any
 from ..db import create_conn
 from ..services.export import export_selected_md, export_json
 from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
@@ -267,7 +262,11 @@ class SearchWindow(tk.Toplevel):
         sel = self.tree.selection()
         if not sel: return
         clip_id = int(sel[0])
-        EditClipWindow(self, clip_id)
+        if clip_id in OPEN_EDITORS:
+            OPEN_EDITORS[clip_id].lift()
+            OPEN_EDITORS[clip_id].focus_force()
+        else:
+            EditClipWindow(self, clip_id)
 
     def delete_clip(self):
         sel = self.tree.selection()

@@ -1,12 +1,11 @@
 ### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
+import tkinter as tk, tkinter.ttk as ttk, threading, time, datetime as dt, sys, pathlib
 import tkinter.scrolledtext as scrolledtext
 import pyperclip
 from ..services.clipboard import get_text
 from ..services.async_worker import runner
 from ..config import load_config, save_config, SEPARATOR
 from ..db import create_conn
-from ..ai import ai_generate_tags, ai_generate_title
 from .search import SearchWindow
 from .editor import EditClipWindow
 from .tasks import TasksWindow
