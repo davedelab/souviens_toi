@@ -1,20 +1,16 @@
-### memex_next/ui/search.py
-import tkinter as tk
-import tkinter.ttk as ttk
-import tkinter.filedialog as fd
-import tkinter.messagebox as mb
-import tkinter.simpledialog as sd
+# memex_next/ui/search.py
 import datetime as dt
-import json
 import pathlib
 import queue
-from typing import List, Dict, Any
+import tkinter as tk
+from tkinter import ttk
+
+from ..ai import ai_generate_categories, ai_generate_tags, ai_generate_title
+from ..config import SEPARATOR, load_config, save_config
 from ..db import create_conn
-from ..services.export import export_selected_md, export_json
-from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..config import load_config, save_config, SEPARATOR
-from .editor import EditClipWindow, OPEN_EDITORS
 from ..services.async_worker import runner
+from ..services.export import export_json, export_selected_md
+from .editor import EditClipWindow
 
 CLIPS_BASE_QUERY = (
     "SELECT c.*, (SELECT COUNT(*) FROM files f WHERE f.clip_id=c.id) AS attachment_count"
@@ -54,28 +50,28 @@ class SearchWindow(tk.Toplevel):
 
         # Gauche : recherche + résultats
         left = ttk.Frame(main_frame)
-        left.pack(side='left', fill='both', expand=True, padx=(0,5))
+        left.pack(side='left', fill='both', expand=True, padx=(0, 5))
 
         search_frame = ttk.Frame(left)
-        search_frame.pack(fill='x', pady=(0,5))
+        search_frame.pack(fill='x', pady=(0, 5))
         ttk.Entry(search_frame, textvariable=self.query_var, font=("Segoe", 14)).pack(side='left', fill='x', expand=True)
         ttk.Button(search_frame, text="Rechercher", command=self.refresh).pack(side='left', padx=2)
 
         period_frame = ttk.Frame(left)
-        period_frame.pack(fill='x', pady=(0,5))
+        period_frame.pack(fill='x', pady=(0, 5))
         for label, days in [("Tout", ""), ("Hier", "1"), ("Semaine", "7"), ("Quinzaine", "15"), ("Mois", "30")]:
             ttk.Radiobutton(period_frame, text=label, variable=self.period_var, value=days, command=self.refresh).pack(side='left', padx=3)
-        ttk.Checkbutton(left, text="A lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0,5))
+        ttk.Checkbutton(left, text="A lire plus tard", variable=self.read_later_only, command=self.refresh).pack(anchor='w', pady=(0, 5))
 
         # Filtres tags
         self.tags_filter_frame = ttk.Frame(left)
-        self.tags_filter_frame.pack(fill='x', pady=(0,5))
-        ttk.Button(left, text="Effacer filtres", command=self.clear_tag_filters).pack(anchor='w', pady=(0,5))
+        self.tags_filter_frame.pack(fill='x', pady=(0, 5))
+        ttk.Button(left, text="Effacer filtres", command=self.clear_tag_filters).pack(anchor='w', pady=(0, 5))
 
         # Filtres catégories
         self.cats_filter_frame = ttk.Frame(left)
-        self.cats_filter_frame.pack(fill='x', pady=(0,5))
-        ttk.Button(left, text="Effacer filtres catégories", command=self.clear_category_filters).pack(anchor='w', pady=(0,5))
+        self.cats_filter_frame.pack(fill='x', pady=(0, 5))
+        ttk.Button(left, text="Effacer filtres catégories", command=self.clear_category_filters).pack(anchor='w', pady=(0, 5))
 
         # Tree
         cols = ("date", "title", "categories", "tags", "attachments")
@@ -93,15 +89,15 @@ class SearchWindow(tk.Toplevel):
 
         # Droite : actions simplifiées
         right = ttk.Frame(main_frame)
-        right.pack(side='right', fill='y', padx=(5,0))
+        right.pack(side='right', fill='y', padx=(5, 0))
         ttk.Label(right, text="Actions").pack(anchor='w')
         ttk.Button(right, text="Supprimer sélection", command=self.bulk_delete_selected).pack(fill='x', pady=2)
         ttk.Button(right, text="Supprimer clip", command=self.delete_clip).pack(fill='x', pady=2)
 
-        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(8,8))
+        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(8, 8))
 
         ia_frame = ttk.LabelFrame(right, text="Intelligence artificielle")
-        ia_frame.pack(fill='x', pady=(0,6))
+        ia_frame.pack(fill='x', pady=(0, 6))
         ttk.Button(ia_frame, text="Tags (sélection)", command=self.ai_tags_selected).pack(fill='x', pady=2)
         ttk.Button(ia_frame, text="Tags manquants (IA)", command=self.ai_tags_missing).pack(fill='x', pady=2)
         ttk.Button(ia_frame, text="Traitement IA (non traités)", command=self.ai_process_untagged).pack(fill='x', pady=2)
@@ -119,7 +115,7 @@ class SearchWindow(tk.Toplevel):
         export_menu.add_separator()
         export_menu.add_command(label="Importer JSON", command=self.import_json)
         export_btn["menu"] = export_menu
-        export_btn.pack(fill='x', pady=(4,0))
+        export_btn.pack(fill='x', pady=(4, 0))
 
     # ---------- actions ----------
     def refresh(self, *args):
@@ -135,7 +131,7 @@ class SearchWindow(tk.Toplevel):
         if self.read_later_only.get():
             clips = [c for c in clips if c.get('read_later')]
         if self.active_tag_filters:
-            clips = [c for c in clips if any(t.lower() in {tg.lower() for tg in self.active_tag_filters} for t in (c.get('tags') or '').replace(';',',').split(','))]
+            clips = [c for c in clips if any(t.lower() in {tg.lower() for tg in self.active_tag_filters} for t in (c.get('tags') or '').replace(';', ',').split(','))]
         if self.active_category_filters:
             clips = [c for c in clips if any(cat.lower() in {c2.lower() for c2 in self.active_category_filters} for cat in (c.get('categories') or '').split(','))]
         key_map = {'date': lambda r: r['ts'], 'title': lambda r: (r['title'] or '').lower(),
@@ -150,9 +146,9 @@ class SearchWindow(tk.Toplevel):
             attachment_map = {clip_id: count for clip_id, count in attachment_counts}
         else:
             attachment_map = {}
-        
+
         conn.close()
-        
+
         for c in clips:
             attachment_count = attachment_map.get(c['id'], 0)
             attachment_display = str(attachment_count) if attachment_count > 0 else ""
@@ -229,7 +225,7 @@ class SearchWindow(tk.Toplevel):
             counts[cat] = conn.execute("SELECT COUNT(*) FROM clips WHERE categories LIKE ?", (f"%{cat}%",)).fetchone()[0]
         conn.close()
         for cat in user_cats:
-            btn = tk.Button(self.cats_filter_frame, text=f"{cat} ({counts.get(cat,0)})", relief='raised', bd=1, padx=4, pady=2,
+            btn = tk.Button(self.cats_filter_frame, text=f"{cat} ({counts.get(cat, 0)})", relief='raised', bd=1, padx=4, pady=2,
                             command=lambda t=cat: self.toggle_category_filter(t))
             btn.config(bg='#10b981' if cat in self.active_category_filters else '#e5e7eb', fg='white' if cat in self.active_category_filters else 'black')
             btn.pack(side='left', padx=2, pady=2)
@@ -252,6 +248,7 @@ class SearchWindow(tk.Toplevel):
 
     def clear_tag_filters(self): self.active_tag_filters.clear(); self.refresh()
     def clear_category_filters(self): self.active_category_filters.clear(); self.refresh()
+
     def clear_all_filters(self):
         self.query_var.set("")
         self.period_var.set("")
@@ -297,7 +294,7 @@ class SearchWindow(tk.Toplevel):
         if not sels: return
         ids = [int(i) for i in sels]
         conn = create_conn()
-        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
+        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
         folder = tk.filedialog.askdirectory()
@@ -320,10 +317,10 @@ class SearchWindow(tk.Toplevel):
         if not sels: return
         ids = [int(i) for i in sels]
         conn = create_conn()
-        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?'*len(ids))})", ids).fetchall()
+        rows = conn.execute(f"SELECT * FROM clips WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
+        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON", "*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
         tk.messagebox.showinfo("Export", "Sélection exportée en JSON.")
@@ -333,13 +330,13 @@ class SearchWindow(tk.Toplevel):
         rows = conn.execute("SELECT * FROM clips ORDER BY ts DESC").fetchall()
         conn.close()
         clips = [dict(zip([c[0] for c in conn.execute("SELECT * FROM clips LIMIT 1").description], r)) for r in rows]
-        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON","*.json"]])
+        path = tk.filedialog.asksaveasfilename(defaultextension=".json", filetypes=[["JSON", "*.json"]])
         if not path: return
         export_json(clips, pathlib.Path(path))
         tk.messagebox.showinfo("Export", "Base complète exportée en JSON.")
 
     def import_json(self):
-        path = tk.filedialog.askopenfilename(filetypes=[["JSON","*.json"]])
+        path = tk.filedialog.askopenfilename(filetypes=[["JSON", "*.json"]])
         if not path: return
         from ..services.importer import import_json as imp
         try:
@@ -354,6 +351,7 @@ class SearchWindow(tk.Toplevel):
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
+
         def work():
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags='' OR tags='non traitée par l IA'").fetchall()
@@ -372,6 +370,7 @@ class SearchWindow(tk.Toplevel):
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
+
         def work():
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE tags LIKE ?", ("%non traitée par l'IA%",)).fetchall()
@@ -385,6 +384,7 @@ class SearchWindow(tk.Toplevel):
             return updated
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
         self.master.show_toast("Traitement IA des non traités¦")
+
     def ai_tags_selected(self):
         sels = self.tree.selection()
         if not sels: return
@@ -392,6 +392,7 @@ class SearchWindow(tk.Toplevel):
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
         ids = [int(i) for i in sels]
+
         def work():
             conn = create_conn()
             updated = 0
@@ -414,6 +415,7 @@ class SearchWindow(tk.Toplevel):
         from ..services.async_worker import runner
         runner.submit(work, cb=lambda res, err: self._uiq.put(("ai_tags_done", res, err)))
         self.master.show_toast("Tags IA en arrière-plan¦")
+
     def ai_cats_selected(self):
         sels = self.tree.selection()
         if not sels: return
@@ -423,13 +425,14 @@ class SearchWindow(tk.Toplevel):
             tk.messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
         ids = [int(i) for i in sels]
+
         def work():
             conn = create_conn()
             updated = 0
             for i in ids:
                 row = conn.execute("SELECT raw_text FROM clips WHERE id=?", (i,)).fetchone()
                 if not row: continue
-                cats = ai_generate_categories(row[0] or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
+                cats = ai_generate_categories(row[0] or '', user_cats=user_cats, lang=cfg.get('ai_lang', 'fr'), max_n=2)
                 conn.execute("UPDATE clips SET categories=? WHERE id=?", (', '.join(cats), i))
                 updated += 1
             conn.commit()
@@ -444,12 +447,13 @@ class SearchWindow(tk.Toplevel):
         if not user_cats:
             tk.messagebox.showinfo("IA", "Aucune catégorie définie (Options > Catégories)")
             return
+
         def work():
             conn = create_conn()
             rows = conn.execute("SELECT id, raw_text FROM clips WHERE categories IS NULL OR categories='' ").fetchall()
             updated = 0
             for i, raw in rows:
-                cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=2)
+                cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=cfg.get('ai_lang', 'fr'), max_n=2)
                 conn.execute("UPDATE clips SET categories=? WHERE id=?", (', '.join(cats), i))
                 updated += 1
             conn.commit()
@@ -467,6 +471,7 @@ class SearchWindow(tk.Toplevel):
         count = int(cfg.get('ai_tag_count', 5))
         max_len = int(cfg.get('ai_title_max_len', 80))
         ids = [int(i) for i in sels]
+
         def work():
             conn = create_conn()
             updated = 0
@@ -475,8 +480,8 @@ class SearchWindow(tk.Toplevel):
                 if not row: continue
                 raw, existing_tags = row
                 title = ai_generate_title(raw or '', lang=lang, max_len=max_len)
-                tags  = ai_generate_tags(raw or '', lang=lang, count=count)
-                cats  = ai_generate_categories(raw or '', user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
+                tags = ai_generate_tags(raw or '', lang=lang, count=count)
+                cats = ai_generate_categories(raw or '', user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
                 existing_list = [p.strip() for p in (existing_tags or '').replace(';', ',').split(',') if p.strip()]
                 merged_tags = list(dict.fromkeys(existing_list + tags))
                 conn.execute(
@@ -497,10 +502,11 @@ class SearchWindow(tk.Toplevel):
         clip_id = int(sels[0])
         from tkinter import filedialog
         paths = filedialog.askopenfilenames(
-            filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
+            filetypes=[["PDF", "*.pdf"], ["Images", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"], ["Documents", "*.txt;*.md;*.docx"], ["Tous", "*.*"]]
         )
         if not paths: return
-        import hashlib, mimetypes
+        import hashlib
+        import mimetypes
         added = 0
         for p in paths:
             try:
@@ -528,10 +534,11 @@ class SearchWindow(tk.Toplevel):
                         conn.close()
                         return True
                     return False
+
                 def done(res, err):
                     self.master.show_toast("Fichier joint" + (" et indexé" if res else ''))
                     self.on_tree_select()
-                runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+                runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
                 added += 1
             except Exception as e:
                 import tkinter.messagebox as mb

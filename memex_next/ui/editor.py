@@ -1,11 +1,22 @@
-### memex_next/ui/editor.py
-import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext as st, tkinter.filedialog as fd, tkinter.simpledialog as sd, tkinter.messagebox as mb
-import pathlib, datetime as dt, sqlite3, hashlib, mimetypes, os, tempfile, webbrowser, io
-from typing import Optional, Dict, Any
+# memex_next/ui/editor.py
+import hashlib
+import io
+import mimetypes
+import os
+import pathlib
+import tempfile
+import tkinter as tk
+import tkinter.filedialog as fd
+import tkinter.messagebox as mb
+import tkinter.scrolledtext as st
+import tkinter.simpledialog as sd
+import webbrowser
+from tkinter import ttk
+from typing import Any
+
+from ..ai import ai_generate_categories, ai_generate_tags, ai_generate_title
+from ..config import SEPARATOR, load_config
 from ..db import create_conn
-from ..config import load_config, save_config, SEPARATOR
-from ..ai import ai_generate_tags, ai_generate_categories, ai_generate_title
-from ..services.export import clip_to_markdown
 from .widgets import Tooltip
 
 try:
@@ -21,10 +32,11 @@ try:
 except Exception:
     Image = ImageTk = None
 
-OPEN_EDITORS: Dict[int, "EditClipWindow"] = {}
+OPEN_EDITORS: dict[int, "EditClipWindow"] = {}
+
 
 class EditClipWindow(tk.Toplevel):
-    def __init__(self, parent, clip_id: int, prefill: Optional[Dict[str, Any]] = None):
+    def __init__(self, parent, clip_id: int, prefill: dict[str, Any] | None = None):
         super().__init__(parent)
         self.parent = parent
         self.clip_id = clip_id
@@ -63,7 +75,7 @@ class EditClipWindow(tk.Toplevel):
 
         # Ligne titre
         row1 = ttk.Frame(top)
-        row1.pack(fill='x', pady=(0,6))
+        row1.pack(fill='x', pady=(0, 6))
         ttk.Label(row1, text="Titre", width=12).pack(side='left')
         self.title_entry = ttk.Entry(row1, textvariable=self.title_var)
         self.title_entry.pack(side='left', fill='x', expand=True)
@@ -72,7 +84,7 @@ class EditClipWindow(tk.Toplevel):
 
         # Tags
         row2 = ttk.Frame(top)
-        row2.pack(fill='x', pady=(0,6))
+        row2.pack(fill='x', pady=(0, 6))
         ttk.Label(row2, text="Tags", width=12).pack(side='left')
         self.tags_entry = ttk.Entry(row2, textvariable=self.tags_var)
         self.tags_entry.pack(side='left', fill='x', expand=True)
@@ -80,22 +92,23 @@ class EditClipWindow(tk.Toplevel):
 
         # Catégories
         row3 = ttk.Frame(top)
-        row3.pack(fill='x', pady=(0,6))
+        row3.pack(fill='x', pady=(0, 6))
         ttk.Label(row3, text="Catégories", width=12).pack(side='left')
         self.cat1_cb = ttk.Combobox(row3, values=self._user_cats, textvariable=self.cat1_var, state='readonly')
         self.cat2_cb = ttk.Combobox(row3, values=self._user_cats, textvariable=self.cat2_var, state='readonly')
         self.cat1_cb.pack(side='left', fill='x', expand=True)
-        self.cat2_cb.pack(side='left', fill='x', expand=True, padx=(6,0))
+        self.cat2_cb.pack(side='left', fill='x', expand=True, padx=(6, 0))
         ttk.Button(row3, text="AI", width=4, command=self._ai_categories).pack(side='left', padx=4)
 
         # Check read later
         row4 = ttk.Frame(top)
-        row4.pack(fill='x', pady=(0,6))
+        row4.pack(fill='x', pady=(0, 6))
         ttk.Checkbutton(row4, text="A lire plus tard", variable=self.read_later_var).pack(anchor='w')
 
         # Toolbar markdown
         toolbar = ttk.Frame(top)
-        toolbar.pack(fill='x', pady=(0,6))
+        toolbar.pack(fill='x', pady=(0, 6))
+
         def btn(txt, tip, cmd, w=4, bg="#374151"):
             b = tk.Button(toolbar, text=txt, width=w, command=cmd, bg=bg, fg='white', activebackground='#111827', relief='raised', bd=1)
             b.pack(side='left', padx=2)
@@ -144,21 +157,21 @@ class EditClipWindow(tk.Toplevel):
         self._tab_attach = ttk.Frame(self._nb_right)
         self._nb_right.add(self._tab_attach, text='Pièces jointes')
         self._attach_list = tk.Listbox(self._tab_attach, height=8)
-        self._attach_list.pack(fill='both', expand=True, padx=0, pady=(4,2))
+        self._attach_list.pack(fill='both', expand=True, padx=0, pady=(4, 2))
         af = ttk.Frame(self._tab_attach)
-        af.pack(fill='x', pady=(0,4))
+        af.pack(fill='x', pady=(0, 4))
         ttk.Button(af, text="Ouvrir", command=self._open_attachment_selected).pack(side='left', expand=True, fill='x')
         ttk.Button(af, text="Exporter", command=self._export_attachment_selected).pack(side='left', expand=True, fill='x', padx=2)
         ttk.Button(af, text="Supprimer", command=self._delete_attachment_selected).pack(side='left', expand=True, fill='x')
-        ttk.Button(self._tab_attach, text="Joindre fichier", command=self._attach_files_to_current_clip).pack(fill='x', padx=0, pady=(0,6))
+        ttk.Button(self._tab_attach, text="Joindre fichier", command=self._attach_files_to_current_clip).pack(fill='x', padx=0, pady=(0, 6))
 
         # Boutons bas
         btn_frame = ttk.Frame(top)
         btn_frame.pack(fill='x', pady=8)
         ttk.Button(btn_frame, text="Supprimer", command=self._delete).pack(side='left')
-        ttk.Button(btn_frame, text="Prévisualiser MD", command=self._preview_md).pack(side='left', padx=(8,2))
+        ttk.Button(btn_frame, text="Prévisualiser MD", command=self._preview_md).pack(side='left', padx=(8, 2))
         ttk.Button(btn_frame, text="Aperçu intégré", command=self._preview_md_embedded).pack(side='left')
-        ttk.Button(btn_frame, text="Résumé IA", command=self._ai_smart_summary).pack(side='left', padx=(8,0))
+        ttk.Button(btn_frame, text="Résumé IA", command=self._ai_smart_summary).pack(side='left', padx=(8, 0))
         ttk.Button(btn_frame, text="Enregistrer", command=self._save).pack(side='right')
         ttk.Button(btn_frame, text="Fermer", command=self._close).pack(side='right', padx=6)
 
@@ -170,7 +183,7 @@ class EditClipWindow(tk.Toplevel):
                            ('<Control-2>', lambda e: (self._md_h2(), 'break')), ('<Control-3>', lambda e: (self._md_h3(), 'break'))):
             self.bind(keys, func)
 
-    def _apply_prefill(self, prefill: Dict[str, Any]):
+    def _apply_prefill(self, prefill: dict[str, Any]):
         self.title_var.set(prefill.get('title', ''))
         self.tags_var.set(prefill.get('tags', ''))
         self.editor.delete('1.0', 'end')
@@ -240,7 +253,7 @@ class EditClipWindow(tk.Toplevel):
     # ---------- Aperçu ----------
     def _preview_md(self):
         text = self.editor.get('1.0', 'end')
-        html_body = _markdown.markdown(text, extensions=['extra','sane_lists','nl2br']) if _markdown else f"<pre>{text}</pre>"
+        html_body = _markdown.markdown(text, extensions=['extra', 'sane_lists', 'nl2br']) if _markdown else f"<pre>{text}</pre>"
         html_doc = (
             "<!doctype html><html><head><meta charset='utf-8'>"
             "<style>body{max-width:860px;margin:40px auto;font-family:Segoe UI,Arial,sans-serif;line-height:1.6}"
@@ -254,7 +267,7 @@ class EditClipWindow(tk.Toplevel):
 
     def _preview_md_embedded(self):
         text = self.editor.get('1.0', 'end')
-        html_body = _markdown.markdown(text, extensions=['extra','sane_lists','nl2br']) if _markdown else f"<pre>{text}</pre>"
+        html_body = _markdown.markdown(text, extensions=['extra', 'sane_lists', 'nl2br']) if _markdown else f"<pre>{text}</pre>"
         win = tk.Toplevel(self)
         win.title("Aperçu Markdown (intégré)")
         win.geometry("900x700")
@@ -278,7 +291,7 @@ class EditClipWindow(tk.Toplevel):
             text = self.editor.get(start, end)
             self.editor.delete(start, end)
             self.editor.insert(start, f"{left}{text}{right}")
-            self.editor.tag_add('sel', start, f"{start}+{len(left)+len(text)+len(right)}c")
+            self.editor.tag_add('sel', start, f"{start}+{len(left) + len(text) + len(right)}c")
         else:
             idx = self.editor.index('insert')
             self.editor.insert(idx, f"{left}{placeholder}{right}")
@@ -298,6 +311,7 @@ class EditClipWindow(tk.Toplevel):
     def _md_bold(self): self._md_wrap('**', '**', 'texte')
     def _md_italic(self): self._md_wrap('*', '*', 'texte')
     def _md_code_inline(self): self._md_wrap('`', '`', 'code')
+
     def _md_code_block(self):
         start, end = self._sel_range()
         if not start or not end:
@@ -307,17 +321,20 @@ class EditClipWindow(tk.Toplevel):
         text = self.editor.get(start, end)
         self.editor.delete(start, end)
         self.editor.insert(start, f"```\n{text}\n```\n")
+
     def _md_h1(self): self._md_prefix_lines('# ')
     def _md_h2(self): self._md_prefix_lines('## ')
     def _md_h3(self): self._md_prefix_lines('### ')
     def _md_bullet(self): self._md_prefix_lines('- ')
     def _md_quote(self): self._md_prefix_lines('> ')
+
     def _md_hr(self):
         idx = self.editor.index('insert')
         self.editor.insert(idx, "\n---\n")
-    
-    def _md_preserve(self): 
+
+    def _md_preserve(self):
         self._md_wrap('%', '%', 'texte à préserver')
+
     def _md_link(self):
         start, end = self._sel_range()
         txt = ''
@@ -335,6 +352,7 @@ class EditClipWindow(tk.Toplevel):
     def _undo_editor(self):
         try: self.editor.edit_undo()
         except tk.TclError: pass
+
     def _redo_editor(self):
         try: self.editor.edit_redo()
         except tk.TclError: pass
@@ -346,8 +364,10 @@ class EditClipWindow(tk.Toplevel):
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         count = int(cfg.get('ai_tag_count', 5))
+
         def work():
             return ai_generate_tags(text, lang=lang, count=count)
+
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
             current_tags = self.tags_var.get() or ''
@@ -360,14 +380,16 @@ class EditClipWindow(tk.Toplevel):
             self.tags_var.set(', '.join(merged))
             self._toast("Tags IA proposés")
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _ai_categories(self):
         text = self.editor.get('1.0', 'end').strip()
         if not text: mb.showinfo("IA", "Aucun texte à analyser"); return
         if not self._user_cats: mb.showinfo("IA", "Aucune catégorie définie (Options > Catégories)"); return
+
         def work():
-            return ai_generate_categories(text, user_cats=self._user_cats, lang=self.cfg.get('ai_lang','fr'), max_n=2)
+            return ai_generate_categories(text, user_cats=self._user_cats, lang=self.cfg.get('ai_lang', 'fr'), max_n=2)
+
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
             res = res or []
@@ -375,7 +397,7 @@ class EditClipWindow(tk.Toplevel):
             self.cat2_var.set(res[1] if len(res) > 1 else '')
             self._toast("Catégories IA proposées")
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _ai_title(self):
         text = self.editor.get('1.0', 'end').strip()
@@ -383,13 +405,15 @@ class EditClipWindow(tk.Toplevel):
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
         max_len = int(cfg.get('ai_title_max_len', 80))
+
         def work():
             return ai_generate_title(text, lang=lang, max_len=max_len)
+
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
             if res: self.title_var.set(res); self._toast("Titre IA appliqué")
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _ai_all(self):
         text = self.editor.get('1.0', 'end').strip()
@@ -399,11 +423,13 @@ class EditClipWindow(tk.Toplevel):
         max_len = int(cfg.get('ai_title_max_len', 80))
         user_cats = cfg.get('user_categories', [])
         count = int(cfg.get('ai_tag_count', 5))
+
         def work():
             title = ai_generate_title(text, lang=lang, max_len=max_len)
-            tags  = ai_generate_tags(text, lang=lang, count=count)
-            cats  = ai_generate_categories(text, user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
+            tags = ai_generate_tags(text, lang=lang, count=count)
+            cats = ai_generate_categories(text, user_cats=user_cats, lang=lang, max_n=2) if user_cats else []
             return {"title": title, "tags": tags, "categories": cats}
+
         def done(res, err):
             if err: mb.showerror("IA", str(err)); return
             if not res: return
@@ -417,18 +443,18 @@ class EditClipWindow(tk.Toplevel):
             self.cat2_var.set(parts[1] if len(parts) > 1 else '')
             self._toast("Titre, tags et Catégories IA appliqués")
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _ai_smart_summary(self):
         text = self.editor.get('1.0', 'end').strip()
-        if not text: 
+        if not text:
             mb.showinfo("IA", "Aucun texte à résumer")
             return
-        
+
         # Vérifier s'il y a des sections marquées
         import re
         preserved_count = len(re.findall(r'%[^%]+%', text))
-        
+
         if preserved_count > 0:
             msg = f"Sections à préserver détectées: {preserved_count}\n\n"
             msg += "Les parties entre %...% seront conservées telles quelles.\n"
@@ -436,16 +462,16 @@ class EditClipWindow(tk.Toplevel):
             msg += "Continuer?"
             if not mb.askyesno("Résumé IA", msg):
                 return
-        
+
         cfg = load_config()
         lang = cfg.get('ai_lang', 'fr')
-        
+
         def work():
             from ..ai import ai_smart_summary
             return ai_smart_summary(text, lang=lang)
-        
+
         def done(res, err):
-            if err: 
+            if err:
                 mb.showerror("IA", str(err))
                 return
             if res:
@@ -453,21 +479,21 @@ class EditClipWindow(tk.Toplevel):
                 self.editor.delete('1.0', 'end')
                 self.editor.insert('1.0', res)
                 self._toast("Résumé IA appliqué")
-        
+
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     # ---------- Pièces jointes ----------
     def _attach_files_to_current_clip(self):
         paths = fd.askopenfilenames(
-            filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
-                       ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
+            filetypes=[["PDF", "*.pdf"], ["Images", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
+                       ["Documents", "*.txt;*.md;*.docx"], ["Tous", "*.*"]]
         )
         if not paths: return
-        
+
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
-        
+
         added = 0
         for p in paths:
             try:
@@ -476,41 +502,41 @@ class EditClipWindow(tk.Toplevel):
                 mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
                 title = pathlib.Path(p).name
                 is_pdf = p.lower().endswith('.pdf')
-                
+
                 # Joindre le fichier d'abord
                 conn = create_conn()
                 conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                              (self.clip_id, title, mime, len(data), sha, data))
                 conn.commit()
                 conn.close()
-                
+
                 # Analyse PDF intelligente si activée
                 if is_pdf and auto_analyze_pdf:
                     self._toast("📄 Analyse du PDF en cours...")
-                    
+
                     def work_pdf(pdf_path=p):
                         from ..pdf_analyzer import analyze_pdf_complete
                         cfg = load_config()
                         lang = cfg.get('ai_lang', 'fr')
                         return analyze_pdf_complete(pdf_path, lang, context="existing")
-                    
+
                     def done_pdf(pdf_result, err):
                         if err:
-                            self._toast(f"❌ Erreur d'analyse PDF: {str(err)}")
+                            self._toast(f"❌ Erreur d'analyse PDF: {err!s}")
                             # Fallback vers extraction classique
                             self._attach_file_classic_editor(mime, data)
                             return
-                        
+
                         if pdf_result and pdf_result.get('success'):
                             # Insérer le résumé dans l'éditeur
                             formatted_content = pdf_result['formatted_content']
                             current_content = self.editor.get('1.0', 'end').strip()
-                            
+
                             if current_content:
                                 self.editor.insert('end', formatted_content)
                             else:
                                 self.editor.insert('1.0', formatted_content.lstrip())
-                            
+
                             # Mettre à jour la base avec le nouveau contenu
                             new_content = self.editor.get('1.0', 'end').strip()
                             conn = create_conn()
@@ -518,21 +544,21 @@ class EditClipWindow(tk.Toplevel):
                                          (new_content, new_content[:150] + '...', self.clip_id))
                             conn.commit()
                             conn.close()
-                            
+
                             self._toast("✅ PDF joint avec résumé IA ajouté!")
                         else:
                             # Fallback vers extraction classique
                             self._attach_file_classic_editor(mime, data)
-                        
+
                         self._load_attachments_list()
                         self._reload_thumbnails()
-                    
+
                     from ..services.async_worker import runner
-                    runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
+                    runner.submit(work_pdf, cb=lambda r, e: self.after(0, done_pdf, r, e))
                 else:
                     # Extraction classique pour non-PDF ou si analyse désactivée
                     self._attach_file_classic_editor(mime, data)
-                
+
                 added += 1
             except Exception as e:
                 mb.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
@@ -554,14 +580,14 @@ class EditClipWindow(tk.Toplevel):
                 conn.close()
                 return True
             return False
-        
+
         def done(res, err):
             self._toast("Fichier joint" + (" et indexé" if res else ''))
             self._load_attachments_list()
             self._reload_thumbnails()
-        
+
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _reload_thumbnails(self):
         for w in self._thumb_container.winfo_children(): w.destroy()
@@ -587,9 +613,9 @@ class EditClipWindow(tk.Toplevel):
             elif mime == 'application/pdf':
                 card = ttk.Frame(self._thumb_container, relief='ridge', borderwidth=1)
                 card.pack(fill='x', pady=4)
-                ttk.Label(card, text=fn or f"PDF #{fid}").pack(side='top', anchor='w', padx=4, pady=(4,0))
+                ttk.Label(card, text=fn or f"PDF #{fid}").pack(side='top', anchor='w', padx=4, pady=(4, 0))
                 btns = ttk.Frame(card)
-                btns.pack(fill='x', pady=(2,4))
+                btns.pack(fill='x', pady=(2, 4))
                 ttk.Button(btns, text="Ouvrir", command=lambda i=fid: self._open_attachment_by_id(i)).pack(side='left')
                 ttk.Button(btns, text="Exporter", command=lambda i=fid: self._export_attachment_by_id(i)).pack(side='left', padx=4)
                 ttk.Button(btns, text="Supprimer", command=lambda i=fid: self._delete_attachment_by_id(i)).pack(side='left')
@@ -668,16 +694,17 @@ class EditClipWindow(tk.Toplevel):
             canvas = tk.Canvas(win, bg='#111')
             canvas.pack(fill='both', expand=True)
             state = {"ph": None}
+
             def render():
                 try:
                     w = canvas.winfo_width() or 900
                     h = canvas.winfo_height() or 700
                     im = img.copy()
-                    im.thumbnail((w-20, h-20))
+                    im.thumbnail((w - 20, h - 20))
                     ph = ImageTk.PhotoImage(im)
                     state["ph"] = ph
                     canvas.delete('all')
-                    canvas.create_image(w//2, h//2, image=ph, anchor='center')
+                    canvas.create_image(w // 2, h // 2, image=ph, anchor='center')
                 except Exception: pass
             canvas.bind('<Configure>', lambda e: render())
             render()
