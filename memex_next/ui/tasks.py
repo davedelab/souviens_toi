@@ -70,8 +70,10 @@ class TasksWindow(tk.Toplevel):
     def _refresh(self):
         for it in self.tree.get_children(): self.tree.delete(it)
         conn = create_conn()
-        rows = conn.execute("SELECT id, title, status, priority, due_at, reminder_days FROM tasks ORDER BY COALESCE(due_at, 1e18) ASC, id DESC").fetchall()
-        conn.close()
+        try:
+            rows = conn.execute("SELECT id, title, status, priority, due_at, reminder_days FROM tasks ORDER BY COALESCE(due_at, 1e18) ASC, id DESC").fetchall()
+        finally:
+            conn.close()
         for rid, title, status, prio, due, reminder_days in rows:
             due_s = ''
             if due:
@@ -117,14 +119,16 @@ class TasksWindow(tk.Toplevel):
             reminder_days = None
         
         conn = create_conn()
-        if due_ts is not None:
-            conn.execute("INSERT INTO tasks(title, status, priority, due_at, reminder_days, created_at) VALUES(?,?,?,?,?,?)",
-                         (title, 'pending', 'medium', due_ts, reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
-        else:
-            conn.execute("INSERT INTO tasks(title, status, priority, reminder_days, created_at) VALUES(?,?,?,?,?)",
-                         (title, 'pending', 'medium', reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
-        conn.commit()
-        conn.close()
+        try:
+            if due_ts is not None:
+                conn.execute("INSERT INTO tasks(title, status, priority, due_at, reminder_days, created_at) VALUES(?,?,?,?,?,?)",
+                             (title, 'pending', 'medium', due_ts, reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
+            else:
+                conn.execute("INSERT INTO tasks(title, status, priority, reminder_days, created_at) VALUES(?,?,?,?,?)",
+                             (title, 'pending', 'medium', reminder_days, int(dt.datetime.now(dt.timezone.utc).timestamp())))
+            conn.commit()
+        finally:
+            conn.close()
         self.new_title.set('')
         self._refresh()
 
@@ -133,9 +137,11 @@ class TasksWindow(tk.Toplevel):
         if not sel: return
         tid = int(sel[0])
         conn = create_conn()
-        conn.execute("UPDATE tasks SET status='done' WHERE id=?", (tid,))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute("UPDATE tasks SET status='done' WHERE id=?", (tid,))
+            conn.commit()
+        finally:
+            conn.close()
         self._refresh()
 
     def _delete(self):
@@ -143,9 +149,11 @@ class TasksWindow(tk.Toplevel):
         if not sel: return
         tid = int(sel[0])
         conn = create_conn()
-        conn.execute("DELETE FROM tasks WHERE id=?", (tid,))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute("DELETE FROM tasks WHERE id=?", (tid,))
+            conn.commit()
+        finally:
+            conn.close()
         self._refresh()
 
     def _set_due_selected(self):
@@ -167,9 +175,11 @@ class TasksWindow(tk.Toplevel):
             mb.showerror("Échéance", f"Date/heure invalide: {e}")
             return
         conn = create_conn()
-        conn.execute("UPDATE tasks SET due_at=? WHERE id=?", (due_ts, tid))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute("UPDATE tasks SET due_at=? WHERE id=?", (due_ts, tid))
+            conn.commit()
+        finally:
+            conn.close()
         self._refresh()
 
     def _set_reminder_selected(self):
@@ -180,8 +190,10 @@ class TasksWindow(tk.Toplevel):
         
         # Récupérer le rappel actuel
         conn = create_conn()
-        row = conn.execute("SELECT title, reminder_days FROM tasks WHERE id=?", (tid,)).fetchone()
-        conn.close()
+        try:
+            row = conn.execute("SELECT title, reminder_days FROM tasks WHERE id=?", (tid,)).fetchone()
+        finally:
+            conn.close()
         
         if not row: return
         title, current_reminder = row
@@ -226,9 +238,11 @@ class TasksWindow(tk.Toplevel):
                     new_reminder = None  # Aucun rappel
                 
                 conn = create_conn()
-                conn.execute("UPDATE tasks SET reminder_days=? WHERE id=?", (new_reminder, tid))
-                conn.commit()
-                conn.close()
+                try:
+                    conn.execute("UPDATE tasks SET reminder_days=? WHERE id=?", (new_reminder, tid))
+                    conn.commit()
+                finally:
+                    conn.close()
                 
                 dlg.destroy()
                 self._refresh()
@@ -294,9 +308,11 @@ class TasksWindow(tk.Toplevel):
                 mb.showerror("Échéance", f"Date/heure invalide: {e}")
                 return
             conn = create_conn()
-            conn.execute("UPDATE tasks SET due_at=? WHERE id=?", (due_ts, tid))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute("UPDATE tasks SET due_at=? WHERE id=?", (due_ts, tid))
+                conn.commit()
+            finally:
+                conn.close()
             dlg.destroy()
             self._refresh()
         ttk.Button(btns, text="OK", command=apply).pack(side='right')

@@ -1,16 +1,23 @@
-### memex_next/ui/app.py
-import tkinter as tk, tkinter.ttk as ttk, threading, time, queue, datetime as dt, sys, pathlib
-import tkinter.scrolledtext as scrolledtext
+# memex_next/ui/app.py
+import datetime as dt
+import pathlib
+import sys
+import threading
+import time
+import tkinter as tk
+from tkinter import scrolledtext, ttk
+
 import pyperclip
-from ..services.clipboard import get_text
-from ..services.async_worker import runner
-from ..config import load_config, save_config, SEPARATOR
-from ..db import create_conn
+
 from ..ai import ai_generate_tags, ai_generate_title
-from .search import SearchWindow
+from ..config import SEPARATOR, load_config, save_config
+from ..db import create_conn
+from ..services.async_worker import runner
+from ..services.clipboard import get_text
 from .editor import EditClipWindow
-from .tasks import TasksWindow
 from .options import OptionsWindow
+from .search import SearchWindow
+from .tasks import TasksWindow
 from .widgets import Tooltip
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -43,9 +50,11 @@ _LANG = {
     }
 }
 
+
 def _tr(key: str) -> str:
     lang = (load_config().get("ui_lang") or "fr").lower()
     return _LANG.get(lang, _LANG["fr"]).get(key, key)
+
 
 class BufferApp(tk.Tk):
     # ---------- capture web ----------
@@ -68,7 +77,8 @@ class BufferApp(tk.Tk):
         if self.separator_enabled and current and not current.endswith(SEPARATOR.strip()):
             self.text_area.insert("end", SEPARATOR)
         self.text_area.insert("end", md if md.endswith("\n") else md + "\n")
-        self.show_toast("Sélection collée en Markdown")    
+        self.show_toast("Sélection collée en Markdown")
+
     def __init__(self):
         super().__init__()
         self.title("Souviens-toi")
@@ -101,14 +111,14 @@ class BufferApp(tk.Tk):
     # ---------- config ----------
     def _setup_config(self):
         cfg = load_config()
-        self.autotag_on_finalize   = bool(cfg.get("autotag_on_finalize", True))
-        self.separator_enabled     = bool(cfg.get("separator_enabled", True))
-        self.floating_icons_enabled= bool(cfg.get("floating_icons_enabled", True))
-        self.floating_icons_size   = int(cfg.get("floating_icons_size", 80))
-        self.floating_icons_opacity= float(cfg.get("floating_icons_opacity", 0.6))
-        self.floating_icons_focus  = bool(cfg.get("floating_icons_focus", True))
-        self.floating_icons_x      = int(cfg.get("floating_icons_x", 0))
-        self.floating_icons_y      = int(cfg.get("floating_icons_y", 200))
+        self.autotag_on_finalize = bool(cfg.get("autotag_on_finalize", True))
+        self.separator_enabled = bool(cfg.get("separator_enabled", True))
+        self.floating_icons_enabled = bool(cfg.get("floating_icons_enabled", True))
+        self.floating_icons_size = int(cfg.get("floating_icons_size", 80))
+        self.floating_icons_opacity = float(cfg.get("floating_icons_opacity", 0.6))
+        self.floating_icons_focus = bool(cfg.get("floating_icons_focus", True))
+        self.floating_icons_x = int(cfg.get("floating_icons_x", 0))
+        self.floating_icons_y = int(cfg.get("floating_icons_y", 200))
 
     # ---------- UI ----------
     def build_ui(self):
@@ -185,12 +195,13 @@ class BufferApp(tk.Tk):
         self.cat1_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat1_var_buf, state=state_main, width=24)
         self.cat2_cb_buf = ttk.Combobox(cats_row, values=self._user_cats_main, textvariable=self.cat2_var_buf, state=state_main, width=24)
         self.cat1_cb_buf.pack(side='left', fill='x', expand=True)
-        self.cat2_cb_buf.pack(side='left', fill='x', expand=True, padx=(6,0))
+        self.cat2_cb_buf.pack(side='left', fill='x', expand=True, padx=(6, 0))
         ttk.Button(cats_row, text="AI", width=3, command=self.ai_fill_categories_from_buffer).pack(side='left', padx=6)
 
         # Toolbar Markdown
         tb = ttk.Frame(self)
-        tb.pack(fill='x', padx=5, pady=(2,2))
+        tb.pack(fill='x', padx=5, pady=(2, 2))
+
         def btn(parent, txt, tip, cmd, w=4, bg="#374151"):
             b = tk.Button(parent, text=txt, width=w, command=cmd, bg=bg, fg="white", activebackground="#111827", relief='raised', bd=2, highlightthickness=0)
             b.pack(side='left', padx=2)
@@ -306,7 +317,7 @@ class BufferApp(tk.Tk):
             text = self.text_area.get(start, end)
             self.text_area.delete(start, end)
             self.text_area.insert(start, f"{left}{text}{right}")
-            self.text_area.tag_add('sel', start, f"{start}+{len(left)+len(text)+len(right)}c")
+            self.text_area.tag_add('sel', start, f"{start}+{len(left) + len(text) + len(right)}c")
         else:
             idx = self.text_area.index('insert')
             self.text_area.insert(idx, f"{left}{placeholder}{right}")
@@ -329,6 +340,7 @@ class BufferApp(tk.Tk):
     def _md_bold_buf(self):      self._md_wrap_buf('**', '**', 'texte')
     def _md_italic_buf(self):    self._md_wrap_buf('*', '*', 'texte')
     def _md_code_inline_buf(self): self._md_wrap_buf('`', '`', 'code')
+
     def _md_code_block_buf(self):
         try:
             start, end = self.text_area.index('sel.first'), self.text_area.index('sel.last')
@@ -341,14 +353,17 @@ class BufferApp(tk.Tk):
         text = self.text_area.get(start, end)
         self.text_area.delete(start, end)
         self.text_area.insert(start, f"```\n{text}\n```\n")
+
     def _md_h1_buf(self): self._md_prefix_lines_buf('# ')
     def _md_h2_buf(self): self._md_prefix_lines_buf('## ')
     def _md_h3_buf(self): self._md_prefix_lines_buf('### ')
     def _md_bullet_buf(self): self._md_prefix_lines_buf('- ')
     def _md_quote_buf(self): self._md_prefix_lines_buf('> ')
+
     def _md_hr_buf(self):
         idx = self.text_area.index('insert')
         self.text_area.insert(idx, "\n---\n")
+
     def _md_link_buf(self):
         try:
             start, end = self.text_area.index('sel.first'), self.text_area.index('sel.last')
@@ -371,6 +386,7 @@ class BufferApp(tk.Tk):
     def _undo_buf(self):
         try: self.text_area.edit_undo()
         except tk.TclError: pass
+
     def _redo_buf(self):
         try: self.text_area.edit_redo()
         except tk.TclError: pass
@@ -390,7 +406,7 @@ class BufferApp(tk.Tk):
 
     # ---------- IA ----------
     def ai_title_from_buffer(self):
-        text = self.text_area.get('1.0','end').strip()
+        text = self.text_area.get('1.0', 'end').strip()
         if not text:
             from tkinter import messagebox
             messagebox.showinfo("IA", "Aucun texte dans le buffer")
@@ -400,8 +416,8 @@ class BufferApp(tk.Tk):
         max_len = int(cfg.get('ai_title_max_len', 80))
 
         def work():
-            from ..ai import ai_generate_title
             return ai_generate_title(text, lang=lang, max_len=max_len)
+
         def done(res, err):
             if err:
                 from tkinter import messagebox
@@ -409,10 +425,10 @@ class BufferApp(tk.Tk):
                 return
             self.title_var.set(res or self.title_var.get())
             self.show_toast("Titre IA Appliqué")
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def ai_fill_tags_from_buffer(self):
-        content = self.text_area.get('1.0','end').strip()
+        content = self.text_area.get('1.0', 'end').strip()
         if not content:
             from tkinter import messagebox
             messagebox.showinfo("IA", "Aucun texte à analyser.")
@@ -422,8 +438,8 @@ class BufferApp(tk.Tk):
         count = int(cfg.get('ai_tag_count', 5))
 
         def work():
-            from ..ai import ai_generate_tags
             return ai_generate_tags(content, lang=lang, count=count)
+
         def done(res, err):
             if err:
                 from tkinter import messagebox
@@ -431,10 +447,10 @@ class BufferApp(tk.Tk):
             else:
                 self.tags_var.set(', '.join(res or []))
                 self.show_toast("Tags IA remplis")
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def ai_fill_categories_from_buffer(self):
-        text = self.text_area.get('1.0','end').strip()
+        text = self.text_area.get('1.0', 'end').strip()
         if not text:
             from tkinter import messagebox
             messagebox.showinfo("IA", "Aucun texte dans le buffer")
@@ -448,9 +464,10 @@ class BufferApp(tk.Tk):
 
         def work():
             from ..ai import ai_generate_categories, ai_suggest_new_categories
-            picked = ai_generate_categories(text, user_cats=user_cats, lang=cfg.get('ai_lang','fr'), max_n=1) or []
-            sugg   = ai_suggest_new_categories(text, existing_list=user_cats, lang=cfg.get('ai_lang','fr'), max_n=1) or []
+            picked = ai_generate_categories(text, user_cats=user_cats, lang=cfg.get('ai_lang', 'fr'), max_n=1) or []
+            sugg = ai_suggest_new_categories(text, existing_list=user_cats, lang=cfg.get('ai_lang', 'fr'), max_n=1) or []
             return {"from_list": picked, "suggested": sugg}
+
         def done(res, err):
             if err:
                 from tkinter import messagebox
@@ -461,7 +478,7 @@ class BufferApp(tk.Tk):
             self.cat1_var_buf.set(from_list[0] if len(from_list) > 0 else self.cat1_var_buf.get())
             self.cat2_var_buf.set(suggested[0] if len(suggested) > 0 else self.cat2_var_buf.get())
             self.show_toast("Catégories IA proposées")
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     # ---------- web ----------
     def capture_article(self):
@@ -475,44 +492,44 @@ class BufferApp(tk.Tk):
 
         cfg = load_config()
         auto_analyze_web = cfg.get('auto_analyze_web', True)
-        
+
         if auto_analyze_web:
             # Nouvelle capture intelligente avec IA
             self.show_toast("🌐 Capture et analyse IA en cours... Veuillez patienter")
             self.after(0, lambda: self._set_ui_busy(True))
-            
+
             def work_smart(u=url):
                 from ..web_capture import capture_web_link_complete
                 cfg = load_config()
                 lang = cfg.get('ai_lang', 'fr')
                 return capture_web_link_complete(u, lang)
-            
+
             def done_smart(web_result, err):
                 if err:
-                    self.show_toast(f"❌ Erreur de capture web: {str(err)}")
+                    self.show_toast(f"❌ Erreur de capture web: {err!s}")
                     # Fallback vers capture classique
                     self._capture_article_classic(url)
                     return
-                
+
                 if web_result and web_result.get('success'):
                     # Créer le clip avec le résumé IA
                     formatted_content = web_result['formatted_content']
                     web_title = web_result.get('title', 'Page web')
-                    
+
                     conn = create_conn()
                     conn.execute(
                         "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags, categories) "
                         "VALUES (?,?,?,?,?,?,?,?)",
-                        (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web", 
-                         formatted_content, formatted_content[:150] + '...', 
+                        (int(dt.datetime.now(dt.timezone.utc).timestamp()), url, web_title, "web",
+                         formatted_content, formatted_content[:150] + '...',
                          self.tags_var.get().strip() or "web", "")
                     )
                     clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                    
+
                     # Enregistrer l'URL source
                     conn.execute("INSERT OR IGNORE INTO source_urls(url, clip_id, created_at) VALUES (?,?,?)",
                                  (url, clip_id, int(dt.datetime.now(dt.timezone.utc).timestamp())))
-                    
+
                     # Sauvegarder le HTML brut si l'option est activée
                     save_html = cfg.get('save_html_source', False)
                     if save_html:
@@ -524,24 +541,24 @@ class BufferApp(tk.Tk):
                             fn = (web_title or 'page') + '.html'
                             conn.execute("INSERT INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                                          (clip_id, fn, 'text/html', len(data), sha, data))
-                    
+
                     conn.commit()
                     conn.close()
-                    
+
                     self.show_toast("✅ Page web capturée et analysée avec IA!")
-                    
+
                     # Génération automatique des tags et catégories en arrière-plan
                     auto_tags = cfg.get('auto_generate_tags_web', True)
                     if auto_tags:
                         self._generate_web_tags_async(clip_id, formatted_content)
-                    
+
                     # Rafraîchir la fenêtre de recherche si elle existe
                     if hasattr(self, '_search_win') and self._search_win:
                         try:
                             self._search_win.refresh_results()
                         except:
                             pass
-                    
+
                     # Ouvrir l'éditeur
                     self.after(100, lambda: EditClipWindow(self, clip_id))
                 else:
@@ -549,12 +566,12 @@ class BufferApp(tk.Tk):
                     error_msg = web_result.get('error', 'Erreur inconnue')
                     self.show_toast(f"⚠️ Capture IA échouée: {error_msg}")
                     self._capture_article_classic(url)
-                
+
                 # Réactiver l'interface
                 self.after(0, lambda: self._set_ui_busy(False))
-            
+
             from ..services.async_worker import runner
-            runner.submit(work_smart, cb=lambda r,e: self.after(0, done_smart, r, e))
+            runner.submit(work_smart, cb=lambda r, e: self.after(0, done_smart, r, e))
         else:
             # Capture classique si IA désactivée
             self._capture_article_classic(url)
@@ -585,74 +602,75 @@ class BufferApp(tk.Tk):
             conn.commit()
             conn.close()
             return clip_id
-        
+
         def done(clip_id, err):
             if err:
                 from tkinter import messagebox
-                messagebox.showerror("Article", f"Erreur de capture: {str(err)}")
+                messagebox.showerror("Article", f"Erreur de capture: {err!s}")
             else:
                 self.show_toast("Article capturé en Markdown")
                 if clip_id:
                     self.after(100, lambda: EditClipWindow(self, clip_id))
-        
+
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _generate_web_tags_async(self, clip_id: int, content: str):
         """Génère automatiquement les tags et catégories pour une capture web"""
         def work():
-            from ..ai import ai_generate_tags, ai_generate_categories
+            from ..ai import ai_generate_categories
             cfg = load_config()
             lang = cfg.get('ai_lang', 'fr')
-            
+
             # Générer tags et catégories en parallèle
             tags = ai_generate_tags(content, lang=lang, count=5)
             categories = ai_generate_categories(content, lang=lang, count=3)
-            
+
             # Mettre à jour la base de données
             conn = create_conn()
             current_row = conn.execute("SELECT tags, categories FROM clips WHERE id=?", (clip_id,)).fetchone()
             if current_row:
                 current_tags = current_row[0] or ''
                 current_cats = current_row[1] or ''
-                
+
                 # Fusionner avec les tags/catégories existants
                 existing_tags = [t.strip() for t in current_tags.replace(';', ',').split(',') if t.strip()]
                 existing_cats = [c.strip() for c in current_cats.split(',') if c.strip()]
-                
+
                 merged_tags = list(dict.fromkeys(existing_tags + tags))
                 merged_cats = list(dict.fromkeys(existing_cats + categories))
-                
+
                 conn.execute("UPDATE clips SET tags=?, categories=? WHERE id=?",
                            (', '.join(merged_tags), ', '.join(merged_cats), clip_id))
                 conn.commit()
             conn.close()
-            
+
             return len(tags) + len(categories)
-        
+
         def done(count, err):
             if not err and count > 0:
                 self.show_toast(f"🏷️ {count} tags/catégories IA générés automatiquement")
-        
+
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     # ---------- files ----------
     def attach_file(self):
         from tkinter import filedialog
         paths = filedialog.askopenfilenames(
-            filetypes=[["PDF","*.pdf"],["Images","*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
-                       ["Documents","*.txt;*.md;*.docx"],["Tous","*.*"]]
+            filetypes=[["PDF", "*.pdf"], ["Images", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"],
+                       ["Documents", "*.txt;*.md;*.docx"], ["Tous", "*.*"]]
         )
         if not paths: return
-        
+
         cfg = load_config()
         auto_analyze_pdf = cfg.get('auto_analyze_pdf', True)
-        
-        import hashlib, mimetypes
+
+        import hashlib
+        import mimetypes
         added = 0
-        first_clip_id = None
-        
+        self._first_clip_id_for_session = None
+
         for p in paths:
             try:
                 data = pathlib.Path(p).read_bytes()
@@ -660,80 +678,80 @@ class BufferApp(tk.Tk):
                 mime = mimetypes.guess_type(p)[0] or 'application/octet-stream'
                 title = pathlib.Path(p).name
                 is_pdf = p.lower().endswith('.pdf')
-                
+
                 # Analyse PDF intelligente si activée
                 if is_pdf and auto_analyze_pdf:
                     # Afficher un message d'attente plus détaillé
                     self.show_toast("📄 Numérisation PDF IA en cours... Veuillez patienter")
                     # Désactiver temporairement les boutons pour éviter les clics multiples
                     self.after(0, lambda: self._set_ui_busy(True))
-                    
+
                     def work_pdf(pdf_path=p):
                         from ..pdf_analyzer import analyze_pdf_complete
                         cfg = load_config()
                         lang = cfg.get('ai_lang', 'fr')
                         return analyze_pdf_complete(pdf_path, lang, context="new")
-                    
+
                     def done_pdf(pdf_result, err):
                         if err:
-                            self.show_toast(f"❌ Erreur d'analyse PDF: {str(err)}")
+                            self.show_toast(f"❌ Erreur d'analyse PDF: {err!s}")
                             # Fallback vers import classique
                             self._attach_file_classic(p, data, sha, mime, title)
                             return
-                        
+
                         if pdf_result and pdf_result.get('success'):
                             # Créer le clip avec le résumé IA
                             formatted_content = pdf_result['formatted_content']
                             pdf_title = pdf_result.get('title', title)
-                            
+
                             conn = create_conn()
                             conn.execute(
                                 "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags) "
                                 "VALUES (?,?,?,?,?,?,?)",
-                                (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", pdf_title, "note", 
-                                 formatted_content, formatted_content[:150] + '...', 
+                                (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", pdf_title, "note",
+                                 formatted_content, formatted_content[:150] + '...',
                                  self.tags_var.get().strip() or "pdf")
                             )
                             clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                            if first_clip_id is None: 
-                                first_clip_id = clip_id
-                            
+                            if self._first_clip_id_for_session is None:
+                                self._first_clip_id_for_session = clip_id
+
                             # Joindre le fichier PDF
                             conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                                          (clip_id, title, mime, len(data), sha, data))
                             conn.commit()
                             conn.close()
-                            
+
                             self.show_toast("✅ PDF analysé et importé avec résumé IA!")
-                            
+
                             # Rafraîchir la fenêtre de recherche si elle existe
                             if hasattr(self, '_search_win') and self._search_win:
                                 try:
                                     self._search_win.refresh_results()
                                 except:
                                     pass
-                        
+
                         else:
                             # Fallback vers import classique
                             self._attach_file_classic(p, data, sha, mime, title)
-                        
+
                         # Réactiver l'interface
                         self.after(0, lambda: self._set_ui_busy(False))
-                    
+
                     from ..services.async_worker import runner
-                    runner.submit(work_pdf, cb=lambda r,e: self.after(0, done_pdf, r, e))
+                    runner.submit(work_pdf, cb=lambda r, e: self.after(0, done_pdf, r, e))
                 else:
                     # Import classique pour non-PDF ou si analyse désactivée
                     self._attach_file_classic(p, data, sha, mime, title)
-                
+
                 added += 1
             except Exception as e:
                 from tkinter import messagebox
                 messagebox.showerror("Import", f"Echec import {pathlib.Path(p).name}: {e}")
         if added:
             self.show_toast(f"{added} fichier(s) ajouté(s)")
-            if first_clip_id:
-                self.after(100, lambda: EditClipWindow(self, first_clip_id))
+            if self._first_clip_id_for_session:
+                self.after(100, lambda: EditClipWindow(self, self._first_clip_id_for_session))
 
     def _attach_file_classic(self, file_path, data, sha, mime, title):
         """Import classique de fichier sans analyse IA"""
@@ -741,12 +759,12 @@ class BufferApp(tk.Tk):
         conn.execute(
             "INSERT INTO clips(ts, source, title, type, raw_text, summary, tags) "
             "VALUES (?,?,?,?,?,?,?)",
-            (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", title, "note", "", "", 
+            (int(dt.datetime.now(dt.timezone.utc).timestamp()), "", title, "note", "", "",
              self.tags_var.get().strip() or "file")
         )
         clip_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        if not hasattr(self, '_first_clip_id') or self._first_clip_id is None:
-            self._first_clip_id = clip_id
+        if self._first_clip_id_for_session is None:
+            self._first_clip_id_for_session = clip_id
         conn.execute("INSERT OR IGNORE INTO files(clip_id, filename, mime, size, sha256, data) VALUES (?,?,?,?,?,?)",
                      (clip_id, title, mime, len(data), sha, data))
         conn.commit()
@@ -767,12 +785,12 @@ class BufferApp(tk.Tk):
                 conn.close()
                 return True
             return False
-        
+
         def done(res, err):
             self.show_toast("Fichier importé et indexé" if res else "Fichier importé")
-        
+
         from ..services.async_worker import runner
-        runner.submit(work, cb=lambda r,e: self.after(0, done, r, e))
+        runner.submit(work, cb=lambda r, e: self.after(0, done, r, e))
 
     def _set_ui_busy(self, busy: bool):
         """Active/désactive l'interface pendant les opérations longues"""
@@ -781,7 +799,7 @@ class BufferApp(tk.Tk):
             for widget in self.winfo_children():
                 if hasattr(widget, 'winfo_children'):
                     for child in widget.winfo_children():
-                        if hasattr(child, 'config') and 'state' in child.keys():
+                        if hasattr(child, 'config') and 'state' in child:
                             child.config(state='disabled' if busy else 'normal')
         except Exception:
             pass  # Ignore les erreurs de configuration UI
@@ -797,28 +815,28 @@ class BufferApp(tk.Tk):
         win.attributes('-alpha', self.floating_icons_opacity)
         # Positionnement intelligent selon le côté configuré
         self._position_floating_icons(win)
-        
+
         # drag - lier aux événements de la fenêtre ET du frame
         win.bind('<Button-1>', self._float_on_press)
         win.bind('<B1-Motion>', self._float_on_drag)
         win.bind('<ButtonRelease-1>', self._float_save_pos)
-        
+
         # frame
         frm = ttk.Frame(win, relief='raised', borderwidth=1)
         frm.pack()
-        
+
         # Taille plus grande et format carré pour faciliter les clics
         btn_size = max(60, self.floating_icons_size)  # Minimum 60px
-        
+
         def make_btn(parent, txt, tip, cmd, bg="#111827"):
-            b = tk.Button(parent, text=txt, 
-                         width=int(btn_size//8),  # Largeur en caractères
+            b = tk.Button(parent, text=txt,
+                         width=int(btn_size // 8),  # Largeur en caractères
                          height=2,  # Hauteur fixe pour format carré
-                         command=cmd, bg=bg, fg="white", 
-                         activebackground="#374151", 
-                         relief='raised', bd=3, 
+                         command=cmd, bg=bg, fg="white",
+                         activebackground="#374151",
+                         relief='raised', bd=3,
                          highlightthickness=0,
-                         font=("Segoe UI", max(10, btn_size//8), "bold"))
+                         font=("Segoe UI", max(10, btn_size // 8), "bold"))
             b.pack(side='top', pady=1, padx=1, fill='both')
             # Permettre le drag depuis les boutons aussi
             b.bind('<Button-1>', self._float_on_press)
@@ -827,12 +845,12 @@ class BufferApp(tk.Tk):
             from .widgets import Tooltip
             Tooltip(b, tip)
             return b
-        
+
         # Lier aussi le drag au frame
         frm.bind('<Button-1>', self._float_on_press)
         frm.bind('<B1-Motion>', self._float_on_drag)
         frm.bind('<ButtonRelease-1>', self._float_save_pos)
-        
+
         make_btn(frm, _tr('float_show'), _tr('float_show'), self._float_green_click, bg="#10b981")
         make_btn(frm, _tr('float_hide'), _tr('float_hide'), self._float_red_click, bg="#ef4444")
         make_btn(frm, '🔍', _tr('float_search'), self._float_search_click, bg="#3b82f6")
@@ -841,15 +859,15 @@ class BufferApp(tk.Tk):
         """Positionne les icônes flottantes selon la configuration"""
         cfg = load_config()
         side = cfg.get('floating_icons_side', 'right')
-        
+
         # Attendre que la fenêtre soit créée pour obtenir les dimensions
         win.update_idletasks()
-        
+
         screen_w = win.winfo_screenwidth()
         screen_h = win.winfo_screenheight()
         win_w = 100  # Estimation de la largeur du dock
         win_h = 200  # Estimation de la hauteur du dock
-        
+
         if side == 'right':
             x = screen_w - win_w - 10
             y = self.floating_icons_y or screen_h // 3
@@ -866,7 +884,7 @@ class BufferApp(tk.Tk):
             # Utiliser la position sauvegardée
             x = self.floating_icons_x
             y = self.floating_icons_y
-        
+
         win.geometry(f"+{int(x)}+{int(y)}")
 
     def _float_on_press(self, event):
@@ -903,7 +921,7 @@ class BufferApp(tk.Tk):
             main_y = self.winfo_rooty()
             main_w = self.winfo_width()
             main_h = self.winfo_height()
-            
+
             # Only hide if mouse is not over main window
             if not (main_x <= x <= main_x + main_w and main_y <= y <= main_y + main_h):
                 self.withdraw()
@@ -922,7 +940,7 @@ class BufferApp(tk.Tk):
         self._toast = tk.Toplevel(self)
         self._toast.wm_overrideredirect(True)
         self._toast.attributes('-topmost', True)
-        lbl = ttk.Label(self._toast, text=text, background='#111827', foreground='white', padding=(8,4))
+        lbl = ttk.Label(self._toast, text=text, background='#111827', foreground='white', padding=(8, 4))
         lbl.pack()
         self._toast.update_idletasks()
         x = self.winfo_rootx() + self.winfo_width() - self._toast.winfo_width() - 20
@@ -957,17 +975,17 @@ class BufferApp(tk.Tk):
             if not getattr(self, 'reminders_enabled', True):
                 raise RuntimeError("off")
             now = int(dt.datetime.now(dt.timezone.utc).timestamp())
-            
+
             conn = create_conn()
             # Récupérer toutes les tâches en attente avec échéance
             rows = conn.execute(
                 "SELECT id, title, due_at, reminder_days FROM tasks WHERE status='pending' AND due_at IS NOT NULL"
             ).fetchall()
             conn.close()
-            
+
             for tid, title, due_at, reminder_days in rows:
                 if tid in self._reminded_ids: continue
-                
+
                 # Calculer le délai de rappel pour cette tâche
                 if reminder_days is not None:
                     if reminder_days == 0:
@@ -976,7 +994,7 @@ class BufferApp(tk.Tk):
                 else:
                     # Utiliser la valeur par défaut
                     lead_seconds = self._reminder_default_days * 24 * 60 * 60
-                
+
                 # Vérifier si le rappel doit être déclenché
                 reminder_time = due_at - lead_seconds
                 if now >= reminder_time:
@@ -985,20 +1003,20 @@ class BufferApp(tk.Tk):
                     if time_left > 0:
                         days_left = time_left // (24 * 60 * 60)
                         hours_left = (time_left % (24 * 60 * 60)) // (60 * 60)
-                        
+
                         if days_left > 0:
                             time_msg = f"dans {days_left} jour(s)"
                         elif hours_left > 0:
                             time_msg = f"dans {hours_left}h"
                         else:
                             time_msg = "très bientôt"
-                        
+
                         self.show_toast(f"⏰ Rappel: {title} - Échéance {time_msg}")
                     else:
                         self.show_toast(f"🚨 Échéance dépassée: {title}")
-                    
+
                     self._reminded_ids.add(tid)
-                    
+
         except Exception: pass
         self.after(self._reminder_interval_ms, self._check_task_reminders)
 
@@ -1017,14 +1035,16 @@ class BufferApp(tk.Tk):
     # ---------- hotkeys ----------
     def _setup_global_hotkey(self):
         try:
-            import ctypes, ctypes.wintypes as wt
+            import ctypes
+            import ctypes.wintypes as wt
         except Exception: return
         user32 = ctypes.windll.user32
         MOD_CONTROL = 0x0002
-        MOD_SHIFT   = 0x0004
+        MOD_SHIFT = 0x0004
         VK_M = 0x4D
         WM_HOTKEY = 0x0312
         if not user32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_SHIFT, VK_M): return
+
         def loop():
             msg = wt.MSG()
             while True:

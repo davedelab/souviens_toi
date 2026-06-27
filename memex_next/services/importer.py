@@ -1,10 +1,11 @@
-### memex_next/services/import.py
-import json, pathlib, shutil, sqlite3
-from datetime import datetime, timezone as TZ
+# memex_next/services/import.py
+import json
+import pathlib
+import sqlite3
+
 
 def migrate_from_db(db_path: pathlib.Path) -> int:
     """Import sans verrou : lecture seule + INSERT un par un."""
-    import sqlite3
 
     # 1. Ouvre la source en lecture seule (URI)
     src = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
@@ -32,11 +33,12 @@ def migrate_from_db(db_path: pathlib.Path) -> int:
     dst.close()
     return after - before
 
+
 def import_json(path: pathlib.Path):
     clips = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(clips, list):
         raise ValueError("JSON doit être une liste")
-    import sqlite3, time
+    import time
     db = sqlite3.connect("souviens_toi.db")
     for c in clips:
         db.execute(
